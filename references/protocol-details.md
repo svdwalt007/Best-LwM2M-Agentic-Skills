@@ -309,6 +309,68 @@ The server indicates its preferred response format using the CoAP Accept option.
 
 ---
 
+## Data Encoding Comparison
+
+### Content-Format Comparison Table
+
+| Format | Content-Format ID | Introduced | Single Resource | Multiple Resources | Composite Ops | Relative Size |
+|--------|-------------------|------------|-----------------|-------------------|---------------|--------------|
+| **Plain Text** | 0 | v1.0 | Yes | No | No | Smallest (single) |
+| **Opaque** | 42 | v1.0 | Yes (opaque only) | No | No | Raw bytes |
+| **CBOR** | 60 | v1.1.1 | Yes | No | No | Compact (single) |
+| **TLV** | 11542 | v1.0 | Yes | Yes | No | Compact binary |
+| **LwM2M JSON** | 11543 | v1.0 | Yes | Yes | No | Large (verbose) |
+| **SenML-JSON** | 110 | v1.1 | Yes | Yes | Yes | Medium (readable) |
+| **SenML-CBOR** | 112 | v1.1 | Yes | Yes | Yes | Small (binary) |
+| **LwM2M CBOR** | 11542† | v1.2 | Yes | Yes | Yes | Smallest (multi) |
+
+† LwM2M CBOR content-format number registered with IANA per v1.2.2 errata (originally shared with TLV; servers must disambiguate by client version and context).
+
+### When to Use Which Format
+
+```
+Decision tree:
+  │
+  ├── Single resource value?
+  │     ├── Numeric → Plain Text (0) — simplest, universal
+  │     ├── Opaque blob → Opaque (42)
+  │     └── Structured → CBOR (60) if v1.1.1+
+  │
+  ├── Multiple resources in one object instance?
+  │     ├── v1.0 client → TLV (11542) — only option
+  │     ├── v1.1+ client → SenML-CBOR (112) — most efficient
+  │     └── v1.2+ client → LwM2M CBOR — smallest for LwM2M payloads
+  │
+  └── Composite operations (Read-Composite, Write-Composite, Observe-Composite)?
+        ├── Requires SenML-JSON (110), SenML-CBOR (112), or LwM2M CBOR
+        ├── SenML-CBOR (112) — best balance of size and compatibility
+        └── LwM2M CBOR — smallest but requires v1.2+
+```
+
+### Encoding Size Comparison (Example: Temperature + Humidity)
+
+Payload: `/3303/0/5700 = 23.5`, `/3304/0/5700 = 65.2`
+
+| Format | Approximate Size | Notes |
+|--------|-----------------|-------|
+| SenML-JSON | ~120 bytes | `[{"bn":"/3303/0/","n":"5700","v":23.5},{"bn":"/3304/0/","n":"5700","v":65.2}]` |
+| SenML-CBOR | ~45 bytes | CBOR-encoded SenML records |
+| LwM2M CBOR | ~35 bytes | Optimised for LwM2M path structure |
+| TLV (two separate reads) | ~16 bytes each | Cannot combine cross-object in single payload |
+
+### SenML-CBOR vs LwM2M CBOR
+
+| Aspect | SenML-CBOR (112) | LwM2M CBOR |
+|--------|-------------------|------------|
+| Encoding | Standard SenML over CBOR (RFC 8428 + 8949) | LwM2M-specific CBOR structure |
+| Path encoding | String base name + name (`bn`, `n`) | Numeric object/instance/resource IDs |
+| Cross-object | Yes (different `bn` prefixes) | Yes (numeric path arrays) |
+| Size advantage | ~30% smaller than SenML-JSON | ~20% smaller than SenML-CBOR |
+| Compatibility | Any SenML decoder works | Requires LwM2M-aware decoder |
+| Best for | Interoperability with non-LwM2M systems | Pure LwM2M deployments wanting minimum size |
+
+---
+
 ## Transport Binding Details
 
 ### CoAP/UDP (Binding "U")

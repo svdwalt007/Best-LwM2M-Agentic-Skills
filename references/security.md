@@ -299,6 +299,43 @@ Flash memory has limited write cycles (typically 10K–100K for NOR, 1K–10K fo
 
 ## Common Security Pitfalls
 
+### Pre-Deployment Security Checklist
+
+Use this checklist before deploying LwM2M devices to production:
+
+**Credential Management:**
+- [ ] Per-device unique PSK keys (never reuse across devices)
+- [ ] Bootstrap credentials separate from operational credentials
+- [ ] PSK keys stored as raw bytes, not hex-encoded strings
+- [ ] Certificate expiry dates monitored (x509 mode)
+- [ ] CA trust chain validated end-to-end (x509 mode)
+- [ ] EST over CoAP (Mode 4) evaluated for zero-touch provisioning
+- [ ] Key rotation plan documented (how to re-provision credentials)
+
+**DTLS Configuration:**
+- [ ] CID enabled with non-zero-length value (RFC 9146)
+- [ ] CID extension type 54 (not obsolete type 53)
+- [ ] Extended Master Secret enabled (RFC 7627)
+- [ ] SNI configured for certificate mode (required v1.2+)
+- [ ] DTLS session material persisted to NVM before sleep
+- [ ] Return Routability Check (RFC 9853) or CoAP Echo (RFC 9175) enabled
+- [ ] Cipher suite restricted to minimum necessary (no weak ciphers)
+
+**Server-Side:**
+- [ ] CID-aware load balancer for clustered deployments
+- [ ] Session cache sized for expected concurrent devices
+- [ ] NoSec (Mode 3) disabled or restricted to test environments
+- [ ] Certificate chain validation not skipped (even on constrained paths)
+- [ ] Multi-tenant credential isolation enforced
+- [ ] Rate limiting on DTLS handshakes (DoS protection)
+
+**OSCORE (if used):**
+- [ ] Sequence number persistence across reboots
+- [ ] Sequence number recovery mechanism (RFC 8613 Appendix B.2)
+- [ ] OSCORE context synchronisation tested for crash recovery
+
+### Detailed Pitfalls
+
 1. **Zero-length CID request:** Client sends CID extension with zero length. This signals CID support but asks the server not to use one — defeats the NAT traversal purpose. Always request a non-zero-length CID.
 
 2. **NoSec in production:** Security Mode 3 must never be used in production. It provides no authentication or encryption.
@@ -318,3 +355,11 @@ Flash memory has limited write cycles (typically 10K–100K for NOR, 1K–10K fo
 9. **OSCORE context not synchronised:** If client and server OSCORE sequence numbers diverge (e.g., after a crash), replay protection blocks legitimate messages. Implement sequence number recovery per RFC 8613 Appendix B.2.
 
 10. **Bootstrap credentials as operational credentials:** The bootstrap PSK/cert should be different from operational credentials. Using the same credentials for both roles weakens the security boundary.
+
+11. **PSK stored as hex string instead of raw bytes:** A PSK of `"AABBCCDD"` (8 ASCII characters) is not the same as `0xAA 0xBB 0xCC 0xDD` (4 raw bytes). Ensure client and server agree on encoding. This is one of the most common deployment issues.
+
+12. **No DTLS handshake rate limiting:** Without rate limiting, an attacker can exhaust server CPU with spoofed ClientHello messages. Implement per-IP handshake rate limits and use DTLS HelloVerifyRequest (cookie) to validate source addresses.
+
+13. **Firmware images not signed:** Object 5 firmware packages should be cryptographically signed (e.g., ECDSA over SHA-256). Without signing, a compromised download server can push malicious firmware. The client must verify the signature before applying.
+
+14. **ACL not provisioned for multi-server:** In multi-server deployments, if Access Control Object (/2) is not provisioned during bootstrap, all servers may get full access to all objects. Always provision explicit ACLs.

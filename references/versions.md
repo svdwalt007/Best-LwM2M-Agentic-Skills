@@ -234,6 +234,113 @@ Work is organised on GitHub with open contributions. Engage now — scope is sti
 
 ---
 
+## Feature Matrix by Version
+
+| Feature | v1.0 | v1.0.2 | v1.1 | v1.1.1 | v1.2 | v1.2.1 | v1.2.2 | v2.0 |
+|---------|:----:|:------:|:----:|:------:|:----:|:------:|:------:|:----:|
+| **Transports** | | | | | | | | |
+| CoAP/UDP (DTLS) | Y | Y | Y | Y | Y | Y | Y | Y |
+| CoAP/SMS | Y | Y | Y | Y | Y | Y | Y | Y |
+| CoAP/TCP (TLS) | - | - | Y | Y | Y | Y | Y | Y |
+| Non-IP (3GPP CIoT) | - | - | Y | Y | Y | Y | Y | Y |
+| Non-IP (LoRaWAN) | - | - | Y | Y | Y | Y | Y | Y |
+| MQTT | - | - | - | - | Y | Y | Y | Y |
+| HTTP | - | - | - | - | Y | Y | Y | Y |
+| **Security** | | | | | | | | |
+| PSK / RPK / x509 | Y | Y | Y | Y | Y | Y | Y | Y |
+| OSCORE (RFC 8613) | - | - | Y | Y | Y | Y | Y | Y |
+| DTLS CID (RFC 9146) | - | - | - | - | Y | Y | Y | Y |
+| DTLS 1.3 (RFC 9147) | - | - | - | - | Y | Y | Y | Y |
+| EST over CoAP | - | - | - | - | Y | Y | Y | Y |
+| SNI required (x509) | - | - | - | - | Y | Y | Y | Y |
+| **Data Formats** | | | | | | | | |
+| TLV | Y | Y | Y | Y | Y | Y | Y | Y |
+| LwM2M JSON | Y | Y | Y | Y | Y | Y | Y | Y |
+| SenML-JSON | - | - | Y | Y | Y | Y | Y | Y |
+| SenML-CBOR | - | - | Y | Y | Y | Y | Y | Y |
+| CBOR (single resource) | - | - | - | Y | Y | Y | Y | Y |
+| LwM2M CBOR | - | - | - | - | Y | Y | Y | Y |
+| **Operations** | | | | | | | | |
+| Read / Write / Execute | Y | Y | Y | Y | Y | Y | Y | Y |
+| Observe / Notify | Y | Y | Y | Y | Y | Y | Y | Y |
+| Queue Mode | Y | Y | Y | Y | Y | Y | Y | Y |
+| Read-Composite | - | - | - | - | Y | Y | Y | Y |
+| Write-Composite | - | - | - | - | Y | Y | Y | Y |
+| Observe-Composite | - | - | - | - | Y | Y | Y | Y |
+| Send operation | - | - | - | - | Y | Y | Y | Y |
+| Bootstrap-Pack-Request | - | - | - | - | Y | Y | Y | Y |
+| **Architecture** | | | | | | | | |
+| LwM2M Gateway | - | - | - | - | Y | Y | Y | Y |
+| Edge Computing Proxy | - | - | - | - | - | - | - | Y |
+| Profile IDs | - | - | - | - | - | - | - | Y |
+| Delta Firmware Updates | - | - | - | - | - | - | - | Y |
+| Multi-Component FOTA | - | - | - | - | - | - | - | Y |
+| eSIM Provisioning Obj | - | - | - | - | - | - | - | Y |
+| **Notification Attributes** | | | | | | | | |
+| pmin / pmax / gt / lt / st | Y | Y | Y | Y | Y | Y | Y | Y |
+| epmin / epmax | - | - | - | - | Y | Y | Y | Y |
+| edge | - | - | - | - | Y | Y | Y | Y |
+| con (confirmable) | - | - | - | - | Y | Y | Y | Y |
+| hqmax (historical queue) | - | - | - | - | Y | Y | Y | Y |
+
+`Y` = Supported, `-` = Not available
+
+---
+
+## Migration Guide: v1.0 to v1.2
+
+### Planning Checklist
+
+When upgrading a v1.0 deployment to v1.2, consider these areas:
+
+#### 1. Transport & Security
+- [ ] **DTLS CID:** Enable RFC 9146 CID for all sleepy devices (Queue Mode). This is the single highest-value upgrade — eliminates re-handshake after NAT rebinding.
+- [ ] **CID extension type:** Ensure both client and server use extension type **54** (RFC 9146 final), not 53 (obsolete draft).
+- [ ] **SNI:** If using x509 certificates, SNI is now **required** in v1.2. Update client TLS configuration.
+- [ ] **Extended Master Secret:** Recommended for DTLS 1.2 (RFC 7627). Enable in DTLS library config.
+- [ ] **DTLS 1.3:** Optional in v1.2. Only enable if both sides support it; maintain DTLS 1.2 fallback.
+- [ ] **EST over CoAP:** Consider migrating from static PSK to EST (Security Mode 4) for dynamic certificate provisioning.
+
+#### 2. Data Formats
+- [ ] **SenML-CBOR:** Migrate from TLV to SenML-CBOR for multi-resource payloads. ~30% smaller than TLV for typical sensor data.
+- [ ] **LwM2M CBOR:** Evaluate for pure LwM2M deployments wanting minimum payload size.
+- [ ] **Content-format negotiation:** Server must check client's `lwm2m` version before requesting new formats. v1.0 clients only support TLV and JSON.
+- [ ] **Backward compatibility:** If mixed fleet (v1.0 + v1.2), server must negotiate format per-client.
+
+#### 3. Operations
+- [ ] **Composite Observe:** Replace multiple individual observations with Composite Observe to reduce observation count and notification traffic. At scale: 5 observations per device → 1 composite observation.
+- [ ] **Send operation:** Evaluate for event-driven telemetry. Device pushes data without prior Read request. Reduces server-initiated traffic.
+- [ ] **Bootstrap-Pack-Request:** If bootstrap performance matters, use `/bspack` for single round-trip provisioning (~25% traffic reduction).
+
+#### 4. Objects
+- [ ] **Object 21 (OSCORE):** If deploying OSCORE, provision security context.
+- [ ] **Object 22 (MQTT Server):** If adding MQTT transport.
+- [ ] **Object 23/24 (Gateway):** If deploying gateway architecture.
+- [ ] **Object versioning:** Declare updated object versions in registration via `ver` attribute.
+
+#### 5. Notification Attributes
+- [ ] **con=true:** Use confirmable notifications for critical alerts (battery low, security events).
+- [ ] **hqmax:** Enable historical notification buffering for time-series data during sleep.
+- [ ] **edge:** Use for boolean threshold alerts (door open/close, tamper detect).
+- [ ] **epmin/epmax:** Tune evaluation periods separately from notification periods.
+
+#### 6. Backward Compatibility Rules
+```
+v1.2 client connecting to v1.0 server:
+  ├── MUST use only v1.0 mandatory features
+  ├── MUST NOT use Composite operations, Send, or new formats
+  ├── CAN advertise lwm2m=1.2 in registration
+  └── Server ignores unknown registration parameters
+
+v1.0 client connecting to v1.2 server:
+  ├── Server MUST NOT send Composite or Send operations
+  ├── Server MUST negotiate TLV or JSON format
+  ├── Server CAN manage client using v1.0 operations only
+  └── Server reads lwm2m=1.0 from registration and adapts
+```
+
+---
+
 ## Specification Documents per Version
 
 Each version produces a set of specification documents:

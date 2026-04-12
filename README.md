@@ -37,6 +37,10 @@
 <br>
 
 <sub>LwM2M logo &copy; <a href="https://omaspecworks.org/">Open Mobile Alliance (OMA SpecWorks)</a> — used with attribution under fair use for open-source reference.</sub>
+<br>
+<sub>3GPP&reg; is a registered trademark of <a href="https://www.3gpp.org/">ETSI</a> — referenced under fair use for standards interoperability documentation.</sub>
+<br>
+<sub>GSMA&reg; is a registered trademark of the <a href="https://www.gsma.com/">GSM Association</a> — referenced under fair use for eSIM/RSP standards documentation.</sub>
 
 <br><br>
 
@@ -64,6 +68,12 @@
   <a href="https://claude.ai/code"><img src="https://img.shields.io/badge/Claude_Code-6B4FBB?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code"></a>&nbsp;
   <a href="https://claude.ai"><img src="https://img.shields.io/badge/Claude_Cowork-2D9CDB?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Cowork"></a>&nbsp;
   <a href="https://github.com/anthropics"><img src="https://img.shields.io/badge/OpenClaw-FF6B35?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="OpenClaw"></a>
+</p>
+
+<p>
+  <a href="https://www.3gpp.org/"><img src="https://img.shields.io/badge/3GPP-0050A0?style=for-the-badge&logo=3gpp&logoColor=white" alt="3GPP"></a>&nbsp;
+  <a href="https://www.gsma.com/"><img src="https://img.shields.io/badge/GSMA-ED1C24?style=for-the-badge&logo=gsma&logoColor=white" alt="GSMA"></a>&nbsp;
+  <a href="https://omaspecworks.org/"><img src="https://img.shields.io/badge/OMA_SpecWorks-00B4D8?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="OMA SpecWorks"></a>
 </p>
 
 <br>
@@ -186,13 +196,14 @@ oma-lwm2m-expert/
 │   └── Web search triggers           #   When to look things up
 │
 └── references/                       # Deep knowledge base
-    ├── versions.md                   #   v1.0 → v2.0 feature deltas
+    ├── versions.md                   #   v1.0 → v2.0 feature deltas + migration guide
     ├── objects.md                    #   Core objects, IPSO, OMNA registry
-    ├── protocol-details.md           #   CoAP mapping, message flows
-    ├── security.md                   #   DTLS/TLS/OSCORE deep-dive
+    ├── protocol-details.md           #   CoAP mapping, message flows, encoding comparison
+    ├── security.md                   #   DTLS/TLS/OSCORE deep-dive + security checklist
     ├── implementations.md            #   Open-source stacks & tools
-    ├── architecture.md               #   Protocol flows, server/client arch
-    └── ecosystem.md                  #   Gateway, 3GPP, LoRaWAN, cloud
+    ├── architecture.md               #   Protocol flows, server/client arch, FOTA recovery
+    ├── ecosystem.md                  #   Gateway, 3GPP, LoRaWAN, cloud
+    └── troubleshooting.md            #   Diagnosis guide, error codes, Wireshark recipes
 ```
 
 ## Specification Coverage

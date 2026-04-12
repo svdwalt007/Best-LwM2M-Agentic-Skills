@@ -51,6 +51,46 @@
 
 ## Bootstrap Flows — All Methods
 
+### Bootstrap Method Decision Tree
+
+```
+Device powering on for the first time:
+  │
+  ├── Credentials pre-provisioned in flash (factory)?
+  │     YES → Factory Bootstrap
+  │     │     Skip bootstrap → Register directly with Server
+  │     │     Pro: No network bootstrap needed, fastest path
+  │     │     Con: Requires secure manufacturing, inflexible
+  │     │
+  │     NO ↓
+  │
+  ├── Credentials on SIM/UICC/eUICC?
+  │     YES → Smartcard Bootstrap
+  │     │     Read PKCS#15 structure from SIM
+  │     │     Pro: Leverages existing SIM infrastructure
+  │     │     Con: Requires SIM provisioning partnership
+  │     │
+  │     NO ↓
+  │
+  ├── Bootstrap-Server credentials available?
+  │     YES → Client-Initiated Bootstrap
+  │     │     ├── Low bandwidth / LPWAN? → Bootstrap-Pack-Request (v1.2+)
+  │     │     │     Single round-trip, ~25% less traffic
+  │     │     └── Standard connectivity? → Standard bootstrap flow
+  │     │           Multiple round-trips, works with any version
+  │     │
+  │     NO → Cannot bootstrap. Provision credentials via:
+  │           ├── Factory programming (USB/JTAG)
+  │           ├── BLE local provisioning app
+  │           ├── QR code + companion app
+  │           └── eSIM remote provisioning (SGP.32)
+  │
+  Re-provisioning (credential rotation, server migration):
+  └── Server-Initiated Bootstrap
+        Server executes /1/0/9 → Client contacts Bootstrap-Server
+        → Standard bootstrap flow restarts
+```
+
 ### Method 1: Factory Bootstrap (No Network)
 ```
 [Manufacturing Line]
@@ -379,6 +419,105 @@ Server                        Client
   │                             │
   │── Execute /5/0/2 ────────►│  [Trigger update]
   │   ... same as Pull from here│
+```
+
+### FOTA Download Resume Logic
+
+When a device enters PSM sleep mid-download (Block2 transfer), the download state must survive:
+
+```
+Client                          File Server
+  │                               │
+  │── GET /firmware.bin ────────► │
+  │   Block2: 0/0/1024            │ (start from block 0)
+  │◄── 2.05 (Block2: 0/1/1024) ─ │
+  │   ... blocks 1–41 received ...│
+  │                               │
+  │   [PSM sleep — persist state] │
+  │   NVM: {uri, block=41, etag}  │
+  │   ... hours pass ...          │
+  │                               │
+  │── GET /firmware.bin ────────► │  (resume after wake)
+  │   Block2: 42/0/1024           │
+  │   If-Match: <stored ETag>     │
+  │                               │
+  │   Case A: ETag matches (image unchanged)
+  │◄── 2.05 (Block2: 42/1/1024)─ │  (continue from block 42)
+  │                               │
+  │   Case B: ETag mismatch (image updated on server)
+  │◄── 4.12 Precondition Failed ─│  (restart from block 0)
+```
+
+**What to persist to NVM before sleep:**
+- Package URI (`/5/0/1`)
+- Last successfully received block number
+- ETag from the first 2.05 response
+- Running integrity check state (CRC32/SHA256 partial hash)
+- Object 5 State (must be `DOWNLOADING = 1`)
+
+### FOTA Rollback & Recovery Strategies
+
+```
+Strategy 1: Dual-Bank (A/B) — Recommended for production
+  ┌─────────────┐  ┌─────────────┐
+  │   Bank A     │  │   Bank B     │
+  │ (active FW)  │  │ (staging)    │
+  └──────┬───────┘  └──────┬───────┘
+         │                 │
+  1. Download new FW ──────► Write to Bank B
+  2. Verify integrity (SHA256 over Bank B)
+  3. Set boot flag → "try Bank B next boot"
+  4. Reboot → bootloader loads Bank B
+  5a. Success → confirm Bank B, mark active
+  5b. Failure → watchdog expires → revert to Bank A
+  
+  Pro: Atomic, always has a known-good fallback
+  Con: Requires 2x flash for firmware images
+
+Strategy 2: Recovery Partition — For flash-constrained devices
+  1. Store minimal recovery image in protected flash region
+  2. Download to main partition, apply
+  3. On boot failure → hardware watchdog → recovery image takes over
+  4. Recovery image re-initiates bootstrap + FOTA with known-good server
+  
+  Pro: Less flash than dual-bank
+  Con: Recovery image must be maintained and tested
+
+Strategy 3: Delta Patching (v2.0 Preview)
+  1. Server computes binary diff (bsdiff/VCDIFF) between old and new FW
+  2. Client downloads patch (60-90% smaller than full image)
+  3. Client applies patch to current image → produces new image
+  4. Verify integrity of patched image
+  5. Reboot with new image
+  
+  Pro: Dramatic bandwidth savings for LPWAN
+  Con: Requires old image hash match; CPU-intensive patch apply
+```
+
+### FOTA Error Recovery Decision Tree
+
+```
+On FOTA failure:
+  │
+  ├── Download failed (State stuck at 1)?
+  │     ├── Network error → retry download with resume logic
+  │     ├── URI unreachable → check /5/0/1, report Result=7
+  │     └── Integrity mismatch → re-download from block 0
+  │
+  ├── Integrity check failed (Result=5)?
+  │     ├── Re-download entire image (clear cached blocks)
+  │     ├── If repeated → report to server, request different URI
+  │     └── Server should verify image is correct for this HW variant
+  │
+  ├── Apply failed (Result=8)?
+  │     ├── Dual-bank → revert to previous bank automatically
+  │     ├── Single-bank → enter recovery mode
+  │     └── Report Result=8 on next registration
+  │
+  └── Unsupported package (Result=6)?
+        ├── Wrong SoC/board variant image sent by server
+        ├── Client should report HW version in /3/0/18, /3/0/19
+        └── Server must match firmware to device hardware model
 ```
 
 ---

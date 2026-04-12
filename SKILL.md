@@ -41,7 +41,19 @@ description: >
   shadow LwM2M, LwM2M at scale, massive IoT architecture, fleet management IoT, multi-
   tenancy LwM2M, observation optimization, CID cluster routing, LwM2M production deployment,
   FOTA flow, SOTA flow, bootstrap flow, registration flow, observe notify flow, LwM2M
-  message flow, LwM2M state machine.
+  message flow, LwM2M state machine. Trigger on smart water metering, smart gas metering,
+  AMI advanced metering infrastructure, track and trace, asset tracking IoT, building
+  automation LwM2M, industrial IoT LwM2M, IIoT device management, connected lighting,
+  smart streetlight. Trigger on Object 9 Software Management, Object 19
+  BinaryAppDataContainer, Object 20 Event Log, Object 504 RSP, multi-component firmware
+  update, application-layer update. Trigger on observation storm, notification storm,
+  lifetime expiry, registration expiry, proxy caching LwM2M. Trigger on EU CRA, Cyber
+  Resilience Act IoT, Radio Equipment Directive, GDPR IoT device, Battery Passport. Trigger
+  on TLV vs SenML, TLV vs CBOR, content-format comparison, data encoding comparison,
+  SenML-CBOR vs LwM2M CBOR. Trigger on LwM2M troubleshooting, CoAP debug, DTLS handshake
+  failure, registration failure, bootstrap failure, FOTA failure, firmware update failed.
+  Trigger on AT&T IoT LwM2M, Vodafone IoT LwM2M, T-Mobile IoT, Deutsche Telekom IoT,
+  operator IoT platform. Trigger on ISO IEC 27001 IoT, 3GPP compliance LwM2M.
   If the user asks about managing IoT devices at scale using lightweight protocols, use
   this skill. Even if they mention "device management" or "IoT protocol" generically without
   saying "LwM2M", consider triggering if the context suggests constrained devices, CoAP,
@@ -214,7 +226,7 @@ You can advise on:
 - **Architecture & Scale:** Client HAL/PAL abstraction, server NBI integration patterns, hyperscaler connectors (Azure IoT Hub, AWS IoT Core), Kafka/AMQP cloud connectors, device twin sync, multi-tenancy, CID cluster routing, observation optimization at scale, fleet segmentation by Profile ID
 - **Wireshark Analysis:** DTLS/CoAP/LwM2M field extraction with tshark, CID filtering (ContentType 25, extension type 54), registration tracking
 
-Read `references/implementations.md` for the full implementation ecosystem reference. Read `references/ecosystem.md` for gateway, v2.0, and 3GPP/industry integration details. Read `references/architecture.md` for complete protocol flows (Bootstrap/Registration/Observe/FOTA/SOTA), client HAL/PAL architecture, server architecture, NBI/hyperscaler integration patterns, and massive-scale IoT design patterns.
+Read `references/implementations.md` for the full implementation ecosystem reference. Read `references/ecosystem.md` for gateway, v2.0, and 3GPP/industry integration details. Read `references/architecture.md` for complete protocol flows (Bootstrap/Registration/Observe/FOTA/SOTA), FOTA resume/rollback/recovery strategies, client HAL/PAL architecture, server architecture, NBI/hyperscaler integration patterns, and massive-scale IoT design patterns. Read `references/troubleshooting.md` for the comprehensive troubleshooting guide covering bootstrap failures, registration failures, DTLS handshake diagnosis, FOTA error recovery, CID issues, and Wireshark diagnosis recipes.
 
 ## Response Patterns
 
@@ -222,7 +234,16 @@ Read `references/implementations.md` for the full implementation ecosystem refer
 Define X precisely, state its purpose in the LwM2M architecture, name the specification document and section where it is defined, and note which version introduced it.
 
 **For "How does X work?" questions:**
-Walk through the procedure step by step. Use message flow notation where relevant (e.g., "Client sends POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=UQ → Server responds 2.01 Created with Location: /rd/abcd"). Cite the relevant TS section.
+Walk through the procedure step by step. Use message flow notation where relevant. Cite the relevant TS section.
+
+Example — "How does registration work?":
+```
+Client → POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=UQ
+         Content-Format: application/link-format
+         Payload: </0/0>,</0/1>,</1/0>,</3/0>,</5/0>
+Server → 2.01 Created, Location-Path: /rd/a1b2c3
+(per OMA-TS-LightweightM2M_Core-V1_2_2, §5.3.1)
+```
 
 **For "Compare X and Y" questions:**
 Create a structured comparison. Use a table if the comparison has multiple dimensions. Always note which spec versions or RFCs apply.
@@ -232,6 +253,21 @@ State the version, the publication date, reference the ERELD, and explain the pr
 
 **For implementation questions:**
 Give concrete guidance with code patterns (C/C++ preferred for clients, Java for Leshan). Distinguish between what the spec mandates, what it recommends, and what is implementation-specific.
+
+Example — "How do I implement a temperature sensor object in Wakaama?":
+```c
+// Register IPSO Temperature Object (3303) with Wakaama
+lwm2m_object_t * obj = calloc(1, sizeof(lwm2m_object_t));
+obj->objID = 3303;
+obj->readFunc = temp_read_cb;   // Returns /3303/0/5700 (Sensor Value)
+obj->discoverFunc = temp_discover_cb;
+lwm2m_list_add(obj->instanceList, create_temp_instance(0));
+
+// In the read callback:
+float value = pal_sensor_read_temperature();
+lwm2m_data_encode_float(value, *dataP);
+return COAP_205_CONTENT;
+```
 
 **For object/data-model questions:**
 Reference the OMNA registry, provide the object ID, list key resources with their IDs and types, and note the object's version history.
@@ -249,7 +285,7 @@ Read `references/architecture.md` for detailed ASCII message flows. Present the 
 Reference the massive-scale patterns in `references/architecture.md`. Key patterns: fleet segmentation by Profile ID, CID cluster routing, observation optimization (Composite Observe, Send, edge aggregation), Queue Mode tuning (lifetime vs battery), and multi-tenancy isolation. Give concrete numbers where possible (e.g., "1M devices × 5 obs = 5M active observations → use Composite Observe to reduce to 1M").
 
 **For troubleshooting questions:**
-Think systematically: identify the interface (Bootstrap, Registration, DM&SE, Reporting), the transport layer, the security layer, and the CoAP message exchange. Reference the expected behaviour from the spec, then enumerate common failure modes.
+Think systematically: identify the interface (Bootstrap, Registration, DM&SE, Reporting), the transport layer, the security layer, and the CoAP message exchange. Reference the expected behaviour from the spec, then enumerate common failure modes. Read `references/troubleshooting.md` for the comprehensive troubleshooting guide with diagnosis steps and Wireshark patterns.
 
 **For security questions:**
 Reference both the LwM2M security model (Security Object /0, Access Control Object /2) AND the underlying security protocols (DTLS/TLS/OSCORE). Distinguish between credential provisioning (bootstrap), session establishment (handshake), and application-level authorization (ACL).
@@ -265,6 +301,38 @@ Use web search for:
 - Community implementation releases or changelogs (Leshan, Wakaama, Anjay, Zephyr)
 - 3GPP specifications referenced by LwM2M (these are maintained by 3GPP, not OMA)
 - Regulatory or operator-specific IoT connectivity requirements
+
+## Cross-Reference Index
+
+When answering questions that span multiple domains, consult the relevant reference files:
+
+| Topic | Primary File | Related Files |
+|-------|-------------|---------------|
+| Version differences & features | `references/versions.md` | `references/objects.md` (new objects per version) |
+| Bootstrap flows | `references/architecture.md` §2 | `references/security.md` (credential provisioning) |
+| Registration & session mgmt | `references/architecture.md` §3 | `references/protocol-details.md` (CoAP mapping) |
+| Observe / Notify | `references/architecture.md` §4, `references/protocol-details.md` §5 | `references/versions.md` (new attributes per version) |
+| FOTA / SOTA | `references/architecture.md` §5-6 | `references/objects.md` (Object 5, 9), `references/troubleshooting.md` (FOTA failures) |
+| Object data model | `references/objects.md` | `references/versions.md` (object additions per version) |
+| Security modes & DTLS | `references/security.md` §1-6 | `references/protocol-details.md` (transport bindings) |
+| DTLS CID (RFC 9146) | `references/security.md` §3 | `references/architecture.md` §3 (Queue Mode + CID flow) |
+| OSCORE | `references/security.md` §6 | `references/objects.md` (Object 21) |
+| Access Control | `references/security.md` §8 | `references/objects.md` (Object 2) |
+| DTLS library comparison | `references/security.md` §9 | `references/implementations.md` (stack compatibility) |
+| Security pitfalls | `references/security.md` §11 | `references/troubleshooting.md` (diagnosis steps) |
+| Implementations (Wakaama, etc.) | `references/implementations.md` | `references/security.md` §9 (DTLS library compat) |
+| Gateway & edge computing | `references/ecosystem.md` §1-2 | `references/architecture.md` §11 (scale patterns) |
+| 3GPP / eSIM / SGP.32 | `references/ecosystem.md` §3-4 | `references/security.md` (DTLS/OSCORE for eSIM) |
+| oneM2M interworking | `references/ecosystem.md` §5 | — |
+| uCIFI smart cities | `references/ecosystem.md` §6 | `references/objects.md` (Objects 3400+) |
+| Cloud / hyperscaler integration | `references/architecture.md` §9-10 | `references/ecosystem.md` (cloud platforms) |
+| Massive-scale patterns | `references/architecture.md` §11 | `references/versions.md` (Profile IDs in v2.0) |
+| Production deployment | `references/architecture.md` ��12 | `references/security.md` (pitfalls), `references/troubleshooting.md` |
+| Troubleshooting & diagnostics | `references/troubleshooting.md` | `references/protocol-details.md` (Wireshark), `references/security.md` |
+| Content-format & data encoding | `references/protocol-details.md` §10-11 | `references/versions.md` (format availability per version) |
+| Wireshark / tshark analysis | `references/protocol-details.md` §12 | `references/troubleshooting.md` (diagnosis patterns) |
+| Northbound API | `references/architecture.md` §9 | `references/versions.md` §9 (v2.0 NB API) |
+| CoAP protocol details | `references/protocol-details.md` | `references/security.md` (DTLS/OSCORE transport) |
 
 ## Important Caveats
 
