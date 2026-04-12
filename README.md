@@ -18,7 +18,7 @@
 <!--                        TITLE & TAGLINE                        -->
 <!-- ============================================================ -->
 
-# OMA LwM2M Expert Skill for Claude
+# OMA LwM2M Expert Skill for Claude, OpenClaw, OpenAI, Chat-GPT, xAI, Gemini, more... 
 
 ### The world's most comprehensive AI-powered IoT protocol engineering skill
 
