@@ -1,0 +1,37 @@
+name: Markdown Lint & Link Check
+
+on:
+  push:
+    branches: [main]
+    paths: ['**.md']
+  pull_request:
+    branches: [main]
+    paths: ['**.md']
+
+permissions:
+  contents: read
+
+jobs:
+  markdown-lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Markdown files
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: '**/*.md'
+          config: '.markdownlint.json'
+
+  link-check:
+    name: Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for broken links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress '**/*.md'
+          fail: false
