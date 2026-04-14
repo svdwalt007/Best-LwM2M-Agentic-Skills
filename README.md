@@ -1,4 +1,4 @@
-# OMA LwM2M Expert Skill for Claude
+# OMA LwM2M Expert Skill for Claude, OpenClaw, OpenAI, ChatGPT, xAI, Gemini and more...
 
 A comprehensive OMA LwM2M (Lightweight Machine-to-Machine) skill that turns Claude into a senior IoT protocol engineer — covering all specification versions from v1.0 (2017) through v2.0 (anticipated 2026), the complete object/resource data model, all transport bindings, security architecture, and the surrounding implementation ecosystem.
 
