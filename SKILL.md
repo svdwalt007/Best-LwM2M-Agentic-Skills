@@ -142,26 +142,30 @@ The LwM2M data model is a tree up to four levels deep: `/{ObjectID}/{InstanceID}
 - 0–7: OMA-defined core objects (Security, Server, Access Control, Device, Connectivity Monitoring, Firmware Update, Location, Connectivity Statistics)
 - 8–42: OMA-defined extended objects
 - 43–32768: Reserved for OMA and external SDOs (3GPP, oneM2M, etc.)
-- 10240–32768: Registered third-party objects
-- 26241–32768: Private/test objects (no registration required)
-- 33000+: Vendor-specific
+- 3200–3499: IPSO smart objects (uCIFI Smart City carved out at 3400–3449)
+- 10240–32768: Registered third-party objects `(TODO(verify))`
+- 26241–32768: OMNA experimental range (no registration required)
+- Vendor-private object IDs begin at 32769; the validation gate rejects IDs < 32768
+
+Note: vendor-private object IDs begin at 32769 and OMNA's validation gate rejects any ID < 32768; the OMNA experimental range is documented as 26241–32768. See references/registry-ddf-authoring.md for the authoritative ID-allocation table and OMNA validation rules.
 
 **Resource Operations:** R (Read), W (Write), RW (Read-Write), E (Execute). Each resource has a defined type: String, Integer, Unsigned Integer, Float, Boolean, Opaque, Time, Objlnk, Corelnk, None (for Execute).
 
-**Data Formats (Content-Format):**
-- TLV (11542) — compact binary, default for v1.0
-- JSON (11543) — LwM2M JSON, deprecated in favour of SenML
-- SenML-JSON (110) — added in v1.1
-- SenML-CBOR (112) — added in v1.1, most compact
-- LwM2M CBOR (11543 for v1.2 assignment) — added in v1.2, object-optimised
-- Plain Text (0) — single resource only
-- Opaque (42) — single opaque resource only
-- CBOR (60) — single resource, added in v1.1.1
+**Data Formats (Content-Format):** the canonical, verified content-format IDs are:
+- text/plain = 0 — single resource only
+- opaque / application/octet-stream = 42 — single opaque resource only
+- CBOR (RFC 8949, single resource) = 60 — added in v1.1.1
+- SenML-JSON (RFC 8428) = 110 — added in v1.1
+- SenML-CBOR (RFC 8428) = 112 — added in v1.1, most compact
+- LwM2M-TLV = 11542 — compact binary, default for v1.0
+- LwM2M-JSON = 11543 — legacy/deprecated, v1.0-era (superseded by SenML)
+- LwM2M-CBOR = 11544 — v1.2+, optimised (object-optimised)
+- SenML-ETCH-JSON = 320 / SenML-ETCH-CBOR = 322 (RFC 8790, composite ops)
 - Core Link Format (40) — for Discover responses
 
 ### 4. Transport Bindings & Security
 
-Read `references/protocol-details.md` for the complete transport and CoAP reference. Read `references/security.md` for security deep-dives.
+Read `references/protocol-details.md` for the complete transport and CoAP reference. Read `references/operation-coap-mapping.md` for LwM2M operation↔CoAP method semantics (POST/GET overloading, Replace vs Partial-Update, composite addressing, conformance response codes). Read `references/security.md` for security deep-dives.
 
 **Transport Bindings:**
 | Binding | Transport | Security | Introduced |
@@ -192,7 +196,7 @@ The `Q` suffix indicates Queue Mode — the server queues operations when the cl
 
 **v1.1 (Jun 2018) / v1.1.1 (Jun 2019):** CoAP over TCP/TLS. Non-IP transports (3GPP CIoT, LoRaWAN). OSCORE. SenML-JSON and SenML-CBOR formats. Resource Instance level access. Enhanced bootstrapping. CBOR for single resources (v1.1.1).
 
-**v1.2 (Nov 2020) / v1.2.1 (Dec 2022) / v1.2.2 (Jun 2024):** MQTT and HTTP transports. LwM2M CBOR format. Composite Read/Write/Observe operations. Send operation (device-initiated data push). LwM2M Gateway support. Enhanced firmware update. Edge/con/hqmax notification attributes. DTLS CID (RFC 9146). DTLS 1.3 (RFC 9147) optional. TLS 1.3 (RFC 8446). EST over CoAP (Security Mode 4). SNI required for certificate mode. Bootstrap-Pack-Request. Object 21 (OSCORE), Object 22 (MQTT Server), Object 23 (LwM2M Gateway), Object 24 (LwM2M Gateway Routing), Object 25 (LwM2M COSE).
+**v1.2 (Nov 2020) / v1.2.1 (Dec 2022) / v1.2.2 (Jun 2024):** MQTT and HTTP transports. LwM2M CBOR format. Composite Read/Write/Observe operations. Send operation (device-initiated data push). LwM2M Gateway support. Enhanced firmware update. Edge/con/hqmax notification attributes. DTLS CID (RFC 9146). DTLS 1.3 (RFC 9147) optional. TLS 1.3 (RFC 8446). EST over CoAP (Security Mode 4). SNI required for certificate mode. Bootstrap-Pack-Request. Object 21 (OSCORE), Object 22 (Virtual Observe Notify), Object 23 (LwM2M COSE), Object 24 (MQTT Server), Object 25 (LwM2M Gateway), Object 26 (LwM2M Gateway Routing).
 
 **v2.0 (Anticipated Q1 2026):** Profile IDs for standardised device-class templates. Delta firmware updates. Enhanced eSIM remote provisioning (Objects 504 RSP, 3443). Edge computing proxy support. DTLS 1.3 alongside DTLS 1.2 (backward compatible). QoS-aware services.
 
@@ -214,7 +218,7 @@ You can advise on:
 - **Architecture & Scale:** Client HAL/PAL abstraction, server NBI integration patterns, hyperscaler connectors (Azure IoT Hub, AWS IoT Core), Kafka/AMQP cloud connectors, device twin sync, multi-tenancy, CID cluster routing, observation optimization at scale, fleet segmentation by Profile ID
 - **Wireshark Analysis:** DTLS/CoAP/LwM2M field extraction with tshark, CID filtering (ContentType 25, extension type 54), registration tracking
 
-Read `references/implementations.md` for the full implementation ecosystem reference. Read `references/ecosystem.md` for gateway, v2.0, and 3GPP/industry integration details. Read `references/architecture.md` for complete protocol flows (Bootstrap/Registration/Observe/FOTA/SOTA), client HAL/PAL architecture, server architecture, NBI/hyperscaler integration patterns, and massive-scale IoT design patterns.
+Read `references/implementations.md` for the full implementation ecosystem reference. Read `references/ecosystem.md` for gateway, v2.0, and 3GPP/industry integration details. Read `references/architecture.md` for complete protocol flows (Bootstrap/Registration/Observe/FOTA/SOTA), client HAL/PAL architecture, server architecture, NBI/hyperscaler integration patterns, and massive-scale IoT design patterns. Read `references/northbound-nbi.md` for northbound REST/SSE design (RFC 9457 error model, OAuth2.1+DPoP, server-RBAC vs Access Control /2, Observe→CloudEvents streaming).
 
 ## Response Patterns
 
@@ -222,7 +226,7 @@ Read `references/implementations.md` for the full implementation ecosystem refer
 Define X precisely, state its purpose in the LwM2M architecture, name the specification document and section where it is defined, and note which version introduced it.
 
 **For "How does X work?" questions:**
-Walk through the procedure step by step. Use message flow notation where relevant (e.g., "Client sends POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=UQ → Server responds 2.01 Created with Location: /rd/abcd"). Cite the relevant TS section.
+Walk through the procedure step by step. Use message flow notation where relevant (e.g., "Client sends POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=UQ → Server responds 2.01 Created with Location: /rd/abcd"). Cite the relevant TS section. Read `references/operation-coap-mapping.md` for LwM2M operation↔CoAP method semantics (POST/GET overloading, Replace vs Partial-Update, composite addressing, conformance response codes).
 
 **For "Compare X and Y" questions:**
 Create a structured comparison. Use a table if the comparison has multiple dimensions. Always note which spec versions or RFCs apply.
@@ -234,13 +238,13 @@ State the version, the publication date, reference the ERELD, and explain the pr
 Give concrete guidance with code patterns (C/C++ preferred for clients, Java for Leshan). Distinguish between what the spec mandates, what it recommends, and what is implementation-specific.
 
 **For object/data-model questions:**
-Reference the OMNA registry, provide the object ID, list key resources with their IDs and types, and note the object's version history.
+Reference the OMNA registry, provide the object ID, list key resources with their IDs and types, and note the object's version history. Read `references/registry-ddf-authoring.md` for OMNA registry rules, DDF authoring, ID allocation, and validation fault codes.
 
 **For deployment/planning questions:**
 Give practical guidance backed by standards. Consider hardware constraints (flash, RAM, battery), radio characteristics (duty cycle, PSM, eDRX), and network conditions (NAT, packet loss, latency).
 
 **For architecture/integration questions:**
-Read `references/architecture.md` first. Show the relevant architecture diagram (client stack, server stack, or integration pattern). Identify which HAL/PAL interfaces need implementation for the target platform. For server integration, recommend the appropriate pattern (REST NBI, event-driven Kafka, or device twin sync) based on the back-end technology. Include the production deployment checklist items relevant to the question.
+Read `references/architecture.md` first. Show the relevant architecture diagram (client stack, server stack, or integration pattern). Identify which HAL/PAL interfaces need implementation for the target platform. For server integration, recommend the appropriate pattern (REST NBI, event-driven Kafka, or device twin sync) based on the back-end technology. Read `references/northbound-nbi.md` for northbound REST/SSE, RFC 9457 error model, OAuth2.1+DPoP, server-RBAC vs Access Control /2, and Observe→CloudEvents streaming. Include the production deployment checklist items relevant to the question.
 
 **For "show me the flow" questions:**
 Read `references/architecture.md` for detailed ASCII message flows. Present the complete flow for the requested operation (Bootstrap, Registration, Observe/Notify, FOTA, SOTA). Include CoAP method codes, URIs, and payload formats. For FOTA, show the Object 5 state machine alongside the message flow.
@@ -274,3 +278,4 @@ Use web search for:
 - **Transport-specific behaviour varies.** Queue Mode over UDP with DTLS CID behaves differently from Queue Mode over TCP. Always clarify which transport binding is in scope.
 - **Content-format support varies by version.** A v1.0 client only supports TLV and JSON. SenML and LwM2M CBOR require v1.1+/v1.2+ respectively. Servers must negotiate formats based on the client's advertised version.
 - **The OMNA registry is the single source of truth** for object and resource definitions. The GitHub repository at `OpenMobileAlliance/lwm2m-registry` is its public mirror.
+- **Cite object identity by OMNA Object ID, not annex letters.** When citing an LwM2M object, cite its OMNA Object ID and the object's DDF/ObjectVersion — never an invented spec-annex letter (e.g. "§E.6"). Object identity is the OMNA Object URN/ID, not an annex number.

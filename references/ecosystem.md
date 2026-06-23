@@ -29,8 +29,8 @@ Formalised in v1.2, the LwM2M Gateway enables management of devices that cannot 
 2. **Non-LwM2M Gateway:** Translates between non-LwM2M protocols (BLE, Zigbee, Z-Wave, Modbus, BACnet) and LwM2M. The gateway models end devices as LwM2M object instances.
 
 ### Gateway Objects
-- **Object 23 (LwM2M Gateway):** Manages the gateway's device registry. Resources include IoT Device list, gateway identifier.
-- **Object 24 (LwM2M Gateway Routing):** Routing table mapping end device identifiers to server-side registration paths.
+- **Object 25 (LwM2M Gateway):** Manages the gateway's device registry. Resources include IoT Device list, gateway identifier.
+- **Object 26 (LwM2M Gateway Routing):** Routing table mapping end device identifiers to server-side registration paths.
 
 ### Endpoint Naming
 Proxied devices use hierarchical endpoint names:
@@ -89,7 +89,7 @@ LwM2M v2.0 introduces a fundamentally new architectural element: the **Edge Prox
 | QoS scheduling | No | Yes |
 | Offline autonomy | Limited | Full |
 | DTLS termination | Yes (gateway is the TLS endpoint) | Yes + optional re-encryption to WAN |
-| Standard objects | Object 23/24 | Object 23/24 + new proxy management objects |
+| Standard objects | Object 25/26 | Object 25/26 + new proxy management objects |
 
 **Academic Reference:** Mingozzi et al., "An Edge-Based LWM2M Proxy for Device Management to Efficiently Support QoS-Aware IoT Services" (IoT 2022) — demonstrates 30-80% latency reduction and significant bandwidth savings with edge-deployed LwM2M proxies.
 
@@ -212,7 +212,7 @@ UE (LwM2M Client) ←──NAS──→ AMF ←──N30──→ SMF ←──N
 **LwM2M over NIDD:**
 - LwM2M/CoAP messages are carried as Non-IP payloads — no IP headers, no UDP
 - OSCORE is preferred over DTLS for NIDD (no DTLS handshake needed — NAS encryption provides transport security)
-- LwM2M Object 18 (Non-IP Data Delivery) configures the NIDD bearer parameters
+- LwM2M Object 18 (Non-Access Stratum (NAS) Configuration) carries the NAS configuration parameters for the cellular/non-IP bearer `(TODO(verify): exact resource set)`
 - The `N` (Non-IP) transport binding in LwM2M v1.1+ maps to NIDD
 - Queue Mode (`NQ` binding) is typical — devices sleep between NIDD transmissions
 - Firmware updates over NIDD are possible but constrained by payload size limits — prefer switching to IP (UDP) transport via Preferred Transport resource (/1/x/22)
@@ -267,7 +267,7 @@ UE (LwM2M Client) ←──NAS──→ AMF ←──N30──→ SMF ←──N
 ### 3GPP-Defined LwM2M Objects
 - Object 10: Cellular Connectivity — RAT selection, roaming, APN configuration
 - Object 11: APN Connection Profile — per-APN authentication, PDN type, QoS
-- Object 18: NIDD — Non-IP Data Delivery configuration (bearer parameters, SCEF address)
+- Object 18: Non-Access Stratum (NAS) Configuration — NAS configuration parameters for the non-IP/control-plane bearer
 - Objects 3400+: Connectivity monitoring extensions
 
 ### eSIM / eUICC Provisioning
@@ -427,7 +427,7 @@ LwM2M messages can be conveyed over MQTT, enabling integration with major cloud 
 - **Azure IoT Hub:** MQTT-based device twins map naturally to LwM2M objects
 - **Google Cloud IoT:** MQTT ingestion with LwM2M data model
 
-The MQTT Server Object (22) configures broker connection parameters.
+The MQTT Server Object (24) configures broker connection parameters.
 
 ### HTTP Binding (v1.2+)
 LwM2M over HTTP/HTTPS for enterprise/IT integration. Maps LwM2M operations to HTTP methods (GET, PUT, POST, DELETE).

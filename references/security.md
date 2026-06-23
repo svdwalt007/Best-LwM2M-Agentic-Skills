@@ -12,6 +12,7 @@
 9. [DTLS Library Comparison](#dtls-library-comparison)
 10. [Session Persistence & NVM](#session-persistence--nvm)
 11. [Common Security Pitfalls](#common-security-pitfalls)
+12. [Northbound/API Security](#northboundapi-security)
 
 ---
 
@@ -45,6 +46,15 @@ All LwM2M communication must use mutual authentication (per spec mandate). NoSec
 - DTLS cipher suites: TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
 - Trust established by pre-provisioning the expected public key
 
+#### RPK trust model (RFC 7250)
+
+RPK does **not** send a certificate. The peer transmits a **bare `SubjectPublicKeyInfo`** structure — an RFC 5480 `SEQUENCE` of `AlgorithmIdentifier` + `BIT STRING` (the EC point) — and nothing else. It is **not** a self-signed X.509 certificate.
+
+- RPK is negotiated via the `client_certificate_type` and `server_certificate_type` TLS extensions (RFC 7250 §3). Each side advertises `RawPublicKey` as an acceptable certificate type; if the peer does not, the handshake falls back to X.509 or fails.
+- Because there is **no chain and no CA**, trust is established **out-of-band** (RFC 7250 §6): the received SPKI must byte-match (or fingerprint-match) a public key already held in a pre-provisioned credential store. A key that is absent from the store, or present but untrusted, **must reject the handshake**.
+- A **self-signed X.509 certificate used as a trust overlay is NOT genuine RPK** — it is X.509 mode (Mode 2) with a self-issued anchor. Genuine RPK carries no ASN.1 certificate wrapper at all.
+- Implementation note: stacks commonly accept a configured X.509 certificate purely as a container, then **extract the SPKI** (e.g. OpenSSL `X509_get_pubkey` followed by `i2d_PUBKEY`) and load **only those SPKI bytes** as the RPK. The certificate's signature, validity dates, and subject are discarded.
+
 ### Mode 2: x509 Certificate
 - Full PKI with certificate chains
 - Security Object /0: Resource 3 = Client certificate, Resource 4 = Server's CA cert or trust anchor, Resource 5 = Client private key
@@ -71,6 +81,9 @@ All LwM2M communication must use mutual authentication (per spec mandate). NoSec
 
 ### Purpose
 CID solves the NAT rebinding problem for sleepy devices. When a device enters PSM sleep and later wakes with a new source IP/port, the DTLS session would normally be lost (5-tuple mismatch). CID allows the session to survive address changes.
+
+### CID is a DTLS 1.2 extension
+RFC 9146 Connection ID is defined as a **DTLS 1.2** extension. An mbedTLS-era stack may therefore need to be **pinned to DTLS 1.2** to use CID at all (DTLS 1.3 carries the connection identifier through a different mechanism — see [DTLS 1.3](#dtls-13-rfc-9147)). CID lets a session survive **NAT rebinding / IP-port migration** for a sleepy or roaming device **without a re-handshake**, which is essential for NB-IoT/cellular **PSM and eDRX wake** cycles where the device frequently reappears on a new source port. `TODO(verify): RFC 9147 §9 — how DTLS 1.3 conveys the connection identifier for 1.3-capable stacks.`
 
 ### Negotiation Flow
 ```
@@ -224,6 +237,12 @@ Stored in Object 21 (OSCORE Object):
 
 **Server-Initiated Bootstrap:** Server triggers bootstrap re-provisioning. Useful for credential rotation.
 
+### Write-only credential resources
+
+Credential resources should be exposed **Write-only (W)** so a server cannot read the secret back over the management interface (for example, the APN Secret `/11/0/6` is W-only). The PSK Value `/0/x/5` is likewise never readable. The trust direction is one-way: secrets are pushed in, never pulled out.
+
+On **embedded Linux**, never store secret bytes in world-readable configuration (e.g. OpenWrt UCI / `/etc/config`, which is typically world-readable). Instead store only **file paths** that point at **root-owned `0600`** files and read the bytes at runtime — **"path-not-payload"**. This keeps the secret material out of config backups, logs, and any process that can read the config tree.
+
 ### EST over CoAP (Security Mode 4, v1.2+)
 1. Client authenticates to EST server using initial credentials
 2. EST server validates client identity
@@ -231,6 +250,10 @@ Stored in Object 21 (OSCORE Object):
 4. EST server signs and returns operational certificate
 5. Client stores certificate in Security Object /0
 6. Client uses new certificate for server authentication
+
+#### EST scope — enrolment-only in practice
+
+EST (RFC 7030) is, in practice, frequently **enrolment-only**. The `simpleenroll`, `simplereenroll`, and `cacerts` operations are implemented, but the **revocation, CRL, and OCSP** paths (RFC 7030 §4.2.3, including server-side key generation / `serverkeygen` and full PKI status reporting) are commonly **omitted** — a server may return **503 Service Unavailable** when no backing CA service is wired. Treat **"EST present" as enrol/re-enrol only** until the revocation paths are verified end-to-end.
 
 ---
 
@@ -277,6 +300,19 @@ When a client connects to multiple servers, Access Control is critical:
 
 **OpenSSL 3.x:** No CID at all — unsuitable for sleepy devices. Too large for MCU targets. DTLS 1.3 experimental in 3.2+.
 
+### RPK (RFC 7250) provider support matrix
+
+RFC 7250 Raw Public Key support varies sharply by stack — the generic "RPK" column above hides important gating details:
+
+| Stack | RPK status | Gate / mechanism |
+|-------|-----------|------------------|
+| mbedTLS | ❌ Not offered | Reserves the extension numbers (19/20) only; **no negotiation and no key API** to actually drive RPK |
+| OpenSSL | ✅ from **≥ 3.2** | `certificate_type` extension support added in 3.2 |
+| wolfSSL | ✅ build-gated | Requires the **`HAVE_RPK`** build option |
+| tinyDTLS | ✅ build-gated | Raw ECDSA key handlers gated behind a build flag (e.g. `LWM2M_ENABLE_RPK`, **default OFF**) |
+
+**Key gotcha — "cipher present ≠ RPK negotiated":** a device can compile in the `TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8` cipher that RPK depends on yet **still not offer RPK** on the handshake, because the DTLS engine gates RPK behind **its own build flag** which must be set **before the DTLS dependency is configured**. Presence of the ECDHE-ECDSA cipher tells you nothing about whether the `certificate_type` extensions are actually advertised. Verify by inspecting the ClientHello/ServerHello certificate-type negotiation, not the cipher list.
+
 ---
 
 ## Session Persistence & NVM
@@ -318,3 +354,19 @@ Flash memory has limited write cycles (typically 10K–100K for NOR, 1K–10K fo
 9. **OSCORE context not synchronised:** If client and server OSCORE sequence numbers diverge (e.g., after a crash), replay protection blocks legitimate messages. Implement sequence number recovery per RFC 8613 Appendix B.2.
 
 10. **Bootstrap credentials as operational credentials:** The bootstrap PSK/cert should be different from operational credentials. Using the same credentials for both roles weakens the security boundary.
+
+11. **"Configured ≠ functional" DTLS:** A server can have a PSK seeded and Security Objects (/0) populated yet **never actually perform a DTLS handshake** — the credentials sit there unused while traffic flows in the clear or fails silently. Verify the handshake path **end-to-end** (capture the actual ClientHello → Finished exchange), not just the presence of credentials.
+
+12. **Dev-mode auth bypass shipped:** When no JWKS / signing keys are configured, a northbound API may **disable authentication entirely** and treat every request as a default/anonymous tenant. Convenient in development, **dangerous if shipped** — the absence of keys becomes an open door. Fail closed: no keys → reject, never default-allow.
+
+13. **DPoP no-op validator:** A DPoP (RFC 9449) validator that parses the embedded JWK but then verifies the proof signature against an **empty key** will **always succeed**, silently disabling token-theft (proof-of-possession) protection. DPoP proofs **must** be verified against the JWK embedded in the proof header — confirm a tampered proof is actually rejected.
+
+14. **Tenant isolation as a data-plane invariant:** Authenticating a tenant from a JWT claim or URI and then returning the **global device list** is a **P0 data leak**. Authentication identifies *who* is asking; it does not scope *what* they see. **Every device-scoped read must be filtered by tenant ownership** at the data layer. (See [northbound-nbi.md](northbound-nbi.md).)
+
+15. **Entropy on constrained devices:** A DTLS RNG that emits predictable bytes when **no hardware entropy source is wired** must **fail closed**, not proceed with a weak key. A handshake that completes with low-entropy ephemeral keys is worse than a handshake that refuses to start.
+
+---
+
+## Northbound/API security
+
+Northbound/API security — OAuth 2.1 + DPoP (RFC 9449), RFC 9457 problem-details error responses, and server-side RBAC as distinct from the device-side Access Control Object (/2) — is covered in [northbound-nbi.md](northbound-nbi.md). The device-plane controls in this document (DTLS/OSCORE, Security Object /0, Access Control /2) protect the southbound; they do **not** substitute for authenticating and tenant-scoping the management API.
