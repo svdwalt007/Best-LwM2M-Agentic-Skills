@@ -3,13 +3,14 @@
 ## Table of Contents
 1. [Object Model Overview](#object-model-overview)
 2. [Core Objects (0–7)](#core-objects-07)
-3. [Extended OMA Objects (8–25)](#extended-oma-objects-825)
-4. [IPSO Smart Objects](#ipso-smart-objects)
-5. [Industry-Registered Objects](#industry-registered-objects)
-6. [Object ID Allocation Ranges](#object-id-allocation-ranges)
-7. [Object Versioning](#object-versioning)
-8. [Reusable Resources](#reusable-resources)
-9. [OMNA Registry Process](#omna-registry-process)
+3. [Extended OMA object resource maps](#extended-oma-object-resource-maps)
+4. [Extended OMA Objects (8–28)](#extended-oma-objects-828)
+5. [IPSO Smart Objects](#ipso-smart-objects)
+6. [Industry-Registered Objects](#industry-registered-objects)
+7. [Object ID Allocation Ranges](#object-id-allocation-ranges)
+8. [Object Versioning](#object-versioning)
+9. [Reusable Resources](#reusable-resources)
+10. [OMNA Registry Process](#omna-registry-process)
 
 ---
 
@@ -119,6 +120,8 @@ Single instance. Mandatory for all LwM2M clients.
 | 21 | Memory Total | Integer | R |
 | 22 | ExtDevInfo | Objlnk | R (multi) |
 
+**Mandatory resources:** Reboot (/3/0/4) is mandatory; Error Code (/3/0/11) and Supported Binding & Modes (/3/0/16) are mandatory. The remaining resources are optional. Current Time (/3/0/13), UTC Offset (/3/0/14), and Timezone (/3/0/15) are RW Time/String resources; Reboot (/3/0/4), Factory Reset (/3/0/5), and Reset Error Code (/3/0/12) are Execute-only.
+
 ### Object 4: Connectivity Monitoring
 Single instance. Network connectivity status.
 
@@ -143,6 +146,38 @@ Single instance. Manages the firmware update state machine.
 
 **Delivery methods:** 0=Pull only, 1=Push only, 2=Both.
 
+#### Firmware Update — State and Update Result
+
+**State (/5/0/3):**
+
+| Value | State |
+|-------|-------|
+| 0 | Idle |
+| 1 | Downloading |
+| 2 | Downloaded |
+| 3 | Updating |
+
+**Update Result (/5/0/5):**
+
+| Value | Result |
+|-------|--------|
+| 0 | Initial (no firmware update yet, or after a successful reset) |
+| 1 | Firmware updated successfully |
+| 2 | Not enough flash |
+| 3 | Out of RAM |
+| 4 | Connection lost during download |
+| 5 | Integrity check failure |
+| 6 | Unsupported package type |
+| 7 | Invalid URI |
+| 8 | Firmware update failed |
+| 9 | Unsupported protocol |
+
+**Delivery Method (/5/0/9):** 0=Pull, 1=Push, 2=Both.
+- **PULL** — the server writes the Package URI to /5/0/1 and the client fetches the binary itself.
+- **PUSH** — the server writes the binary directly to /5/0/0 Package (Opaque).
+
+A conformant client sets **Update Result** (not just State) on every terminal outcome, so the server can distinguish success from each failure cause.
+
 ### Object 6: Location
 Single instance. GPS/GNSS data.
 
@@ -155,7 +190,67 @@ Key resources: SMS TX Counter (0), SMS RX Counter (1), TX Data (2), RX Data (3),
 
 ---
 
-## Extended OMA Objects (8–25)
+## Extended OMA object resource maps
+
+### Object 9: Software Management
+
+Multi-instance — one instance per software bundle. Distinct from /5, which owns the firmware/OS image; /9 manages installable application software packages.
+
+| Resource ID | Name | Type | Operations | Description |
+|-------------|------|------|------------|-------------|
+| 0 | PkgName | String | R | Name of the software package |
+| 1 | PkgVersion | String | R | Version of the software package |
+| 2 | Package | Opaque | W | Software binary delivered by push |
+| 3 | PackageURI | String | RW | URI the client fetches the package from (pull) |
+| 4 | Install | — | E | Install the downloaded package |
+| 5 | Checkpoint | Objlnk | R | Link to a checkpoint object |
+| 6 | Uninstall | — | E | Uninstall the package |
+| 7 | Update State | Integer | R | Software update state machine |
+| 8 | Update Supported Objects | Boolean | RW | Whether supported objects are updated on install |
+| 9 | Update Result | Integer | R | Result code of the last install/uninstall |
+| 10 | Activate | — | E | Activate the installed software |
+| 11 | Deactivate | — | E | Deactivate the installed software |
+| 12 | Activation State | Boolean | R | True if the software is currently active |
+| 13 | Package Settings | Objlnk | RW | Link to package-specific settings object |
+
+### Object 11: APN Connection Profile
+
+Multi-instance — one instance per APN profile. Linked from the Server Object via /1/x/10 APN Link.
+
+| Resource ID | Name | Type | Operations | Description |
+|-------------|------|------|------------|-------------|
+| 0 | Profile Name | String | RW | Human-readable profile name (mandatory) |
+| 1 | APN | String | RW | Access Point Name |
+| 2 | Auto Select APN by Device | Boolean | RW | Device selects APN automatically |
+| 3 | Enable Status | Boolean | RW | Whether this profile is enabled |
+| 4 | Authentication Type | Integer | RW | Auth type enum (mandatory): 0=PAP, 1=CHAP, 2=PAP or CHAP, 3=None |
+| 5 | User Name | String | RW | Authentication user name |
+| 6 | Secret | String | W | Authentication secret — **Write-only** so a server cannot read the credential back |
+| 7 | Reconnect Schedule | String | RW | Schedule for reconnection attempts |
+| 8 | Validity (MCC-MNC) | String | R (multi) | PLMNs for which this profile is valid |
+| 9 | Connection Establishment Time | Time | R (multi) | Timestamp of connection establishment |
+| 10 | Connection Establishment Result | Integer | R (multi) | Result of connection establishment |
+| 11 | Connection End Time | Time | R (multi) | Timestamp of connection teardown |
+| 12 | Total Bytes Sent | Integer | R | Cumulative bytes transmitted |
+| 13 | Total Bytes Received | Integer | R | Cumulative bytes received |
+| 14 | IP Address | String | R (multi) | Assigned IP address(es) |
+
+**Note:** Credential resources such as Secret (/11/0/6) are exposed Write-only so a server can provision but never retrieve them.
+
+### Object 25: LwM2M Gateway
+
+Multi-instance — one instance per aggregated non-LwM2M end-device. An OMA Technical Specification object (OMA-TS-LwM2M_Gateway), not part of the core Enabler set. This is the canonical gateway/aggregation pattern for representing non-LwM2M devices behind a single LwM2M client.
+
+| Resource ID | Name | Type | Operations | Description |
+|-------------|------|------|------------|-------------|
+| 0 | Device ID | String | R | Identifier of the bridged end-device (mandatory) |
+| 1 | Prefix | String | RW | URI path segment under which the server addresses the bridged device's objects as sub-endpoints (mandatory) |
+| 2 | IoT Device Objects | String | R | CoreLink string of the device's object tree, e.g. `</3>,</4>` (mandatory) |
+| 3 | Device Status | String | R | Status of the bridged end-device |
+
+---
+
+## Extended OMA Objects (8–28)
 
 | Object ID | Name | Version Added | Key Purpose |
 |-----------|------|---------------|-------------|
@@ -168,14 +263,20 @@ Key resources: SMS TX Counter (0), SMS RX Counter (1), TX Data (2), RX Data (3),
 | 14 | Software Component | v1.1 | Software component inventory |
 | 15 | DevCapMgmt | v1.1 | Device capability management |
 | 16 | Portfolio | v1.1 | Software/firmware portfolio tracking |
-| 18 | Non-IP Data Delivery (NIDD) | v1.1 | 3GPP Non-IP Data Delivery configuration |
+| 17 | Communications Characteristics | v1.0 | Communication parameters / characteristics configuration |
+| 18 | Non-Access Stratum (NAS) Configuration | v1.0 | 3GPP NAS configuration parameters |
 | 19 | BinaryAppDataContainer | v1.1 | Generic binary application data exchange |
 | 20 | Event Log | v1.1 | Device event/log management |
 | 21 | OSCORE | v1.2 | OSCORE security context parameters |
-| 22 | MQTT Server | v1.2 | MQTT broker connection configuration |
-| 23 | LwM2M Gateway | v1.2 | Gateway device registry and management |
-| 24 | LwM2M Gateway Routing | v1.2 | Gateway routing table for proxied devices |
-| 25 | LwM2M COSE | v1.2 | COSE key and credential management |
+| 22 | Virtual Observe Notify | v1.1 | Observe/notify multiple resources across objects/instances in fewer messages |
+| 23 | LwM2M COSE | v1.2 | COSE key/credential parameters (used with the MQTT transport binding) |
+| 24 | MQTT Server | v1.2 | MQTT broker connection configuration (MQTT transport binding) |
+| 25 | LwM2M Gateway | Gateway TS | Smart proxy: holds one instance per connected downstream IoT device, mapping object paths and routing commands (e.g. CoAP GET) so non-LwM2M / constrained devices are managed by the central server. See the resource map under "Object 25: LwM2M Gateway" above |
+| 26 | LwM2M Gateway Routing | Gateway TS | Routing table for devices proxied behind a LwM2M Gateway (/25) |
+| 27 | 5GNR Connectivity | v1.2 | 5G NR connectivity parameters |
+| 28 | Device RF Capabilities | v1.2 | Device radio-frequency capability reporting |
+
+> **Source of truth:** the IDs/names above are reconciled against the OMNA LwM2M Object registry (`openmobilealliance.org/specifications/registries/objects`, mirrored at `OpenMobileAlliance/lwm2m-registry` → `prod/DDF.xml`). Object **23 = LwM2M COSE**, **24 = MQTT Server**, **25 = LwM2M Gateway**, **26 = LwM2M Gateway Routing** — confirmed against the registry and the OMA MQTT-binding / Gateway / Virtual Observe Notify specifications. (An earlier revision had the 22–26 block scrambled; there is **no** "reserved/unassigned" gap at 23.) **Version Added** reflects best-known introduction — verify each against the object's DDF `ObjectVersion`; note that **Objects 25 and 26 (Gateway, Gateway Routing) are defined in the separate OMA LwM2M Gateway Technical Specification**, not the core Enabler.
 
 ---
 
@@ -243,13 +344,13 @@ Selected notable third-party registrations:
 
 | Object ID Range | Organisation | Domain |
 |-----------------|-------------|--------|
-| 500-509 | OMA / 3GPP | eSIM provisioning, RSP |
-| 2048-2049 | GSMA | CIoT device management |
-| 3200-3203 | uCIFI | Smart City sensors |
-| 3400-3443 | 3GPP / OMA | Connectivity management, eSIM |
-| 10241-10299 | AVSystem | Anjay-specific extensions |
-| 10300-10399 | Various vendors | Vendor device management |
-| 10350-10375 | Industrial IoT | Modbus integration, BACnet |
+| 500-509 | OMA / 3GPP | eSIM provisioning, RSP (TODO(verify)) |
+| 2048-2049 | GSMA | CIoT device management (TODO(verify)) |
+| 3200-3499 | IPSO | IPSO Smart Objects |
+| 3400-3449 | uCIFI | Smart City (carved out of the IPSO band) |
+| 10262-10284 | SEW | Digital Utility — water metering |
+| 10300-10399 | Various vendors | Vendor device management (TODO(verify)) |
+| 10350-10375 | Industrial IoT | Modbus integration, BACnet (TODO(verify)) |
 
 ---
 
@@ -258,13 +359,17 @@ Selected notable third-party registrations:
 | Range | Purpose |
 |-------|---------|
 | 0–7 | OMA core objects |
-| 8–42 | OMA extended objects |
-| 43–1023 | Reserved for OMA and external SDOs |
-| 1024–2047 | Registered external SDO objects |
-| 2048–10239 | Registered industry objects |
-| 10240–26240 | Registered vendor objects |
-| 26241–32768 | Private/test objects (no registration required) |
-| 33000+ | Vendor-specific (no registration required) |
+| 8–42 | OMA extended objects (TODO(verify)) |
+| 43–1023 | Reserved for OMA and external SDOs (TODO(verify)) |
+| 1024–2047 | Registered external SDO objects (TODO(verify)) |
+| 2048–10239 | Registered industry objects (TODO(verify)) |
+| 3200–3499 | IPSO Smart Objects (uCIFI Smart City carved out as 3400–3449) |
+| 10240–26240 | Registered vendor objects (TODO(verify)) |
+| 10262–10284 | SEW Digital Utility — water metering |
+| 26241–32768 | OMNA experimental range (private/test, no registration required) |
+| 32769+ | Vendor-private IDs (validation rejects ObjectID < 32768) |
+
+Authoritative allocation rules, URN composition, and validation fault codes are in registry-ddf-authoring.md.
 
 ---
 
@@ -310,3 +415,7 @@ To register a new object:
 6. After approval, the object appears in the OMNA registry
 
 Reusable Resources follow a similar process. Object IDs are formally allocated by OMA; do not self-assign from the registered ranges.
+
+**Citation caveat:** Do not cite objects by an invented spec-annex letter (e.g. '§E.6'); cite the OMNA Object ID/URN and the object's DDF ObjectVersion. See registry-ddf-authoring.md.
+
+For DDF.xml schema, validation fault codes (413 Type/Operation, 417 SenML Unit, 418 RangeEnumeration, etc.), and the OMNA Standard/Full/custom library model, see registry-ddf-authoring.md.

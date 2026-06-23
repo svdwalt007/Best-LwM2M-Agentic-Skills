@@ -343,7 +343,7 @@ The server indicates its preferred response format using the CoAP Accept option.
 ### MQTT (Binding "M")
 - Added in v1.2
 - LwM2M messages mapped to MQTT pub/sub topics
-- Requires MQTT Server Object /22 configuration
+- Requires MQTT Server Object /24 configuration
 - Useful for cloud platform integration (AWS IoT, Azure IoT Hub)
 - Security via TLS on MQTT connection
 

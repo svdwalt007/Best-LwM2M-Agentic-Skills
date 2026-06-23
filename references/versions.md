@@ -98,7 +98,7 @@ Starting with v1.1, the specification is split into two documents:
 - Object 14: Software Management
 - Object 15: DevCapMgmt (Device Capability Management)
 - Object 16: Portfolio
-- Object 18: Non-IP Data Delivery (NIDD)
+- Object 18: Non-Access Stratum (NAS) Configuration
 - Object 19: BinaryAppDataContainer
 - Object 20: Event Log
 
@@ -118,7 +118,7 @@ The largest feature release since v1.0. Significantly extends LwM2M's reach and 
 ### New Features
 
 **Transports:**
-- **MQTT transport binding:** LwM2M messaging over MQTT pub/sub. Defined in Transport TS §6.7. New MQTT Server Object (22).
+- **MQTT transport binding:** LwM2M messaging over MQTT pub/sub. Defined in Transport TS §6.7. New MQTT Server Object (24).
 - **HTTP transport binding:** LwM2M over HTTP/HTTPS. Defined in Transport TS §6.8.
 
 **Operations:**
@@ -134,7 +134,7 @@ The largest feature release since v1.0. Significantly extends LwM2M's reach and 
 - **LwM2M Gateway support:** Formalised gateway architecture allowing:
   - Non-LwM2M devices to be managed through a LwM2M gateway
   - LwM2M devices behind a gateway to be proxied to the server
-  - New Objects 23 (Gateway) and 24 (Gateway Routing)
+  - New Objects 25 (LwM2M Gateway) and 26 (LwM2M Gateway Routing)
 
 **Notification Attributes (new):**
 - `edge` — Trigger notification on rising/falling edge (boolean threshold crossing)
@@ -159,14 +159,15 @@ The largest feature release since v1.0. Significantly extends LwM2M's reach and 
 **Other:**
 - Clarified object versioning rules
 - Updated Endpoint Client Name URN format recommendations
-- New Object 21 (OSCORE), Object 25 (LwM2M COSE)
+- New Object 21 (OSCORE), Object 23 (LwM2M COSE)
 
 ### New Objects
 - Object 21: OSCORE Security Context
-- Object 22: MQTT Server
-- Object 23: LwM2M Gateway
-- Object 24: LwM2M Gateway Routing
-- Object 25: LwM2M COSE
+- Object 22: Virtual Observe Notify
+- Object 23: LwM2M COSE
+- Object 24: MQTT Server
+- Object 25: LwM2M Gateway
+- Object 26: LwM2M Gateway Routing
 
 ---
 
