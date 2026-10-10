@@ -20,7 +20,7 @@ The following are officially listed on openmobilealliance.org/specifications/res
 - **LwM2M:** v1.0, v1.1, v1.2 | **Transport:** CoAP/UDP (Californium), CoAP/TCP
 - **DTLS:** Scandium — CID (ext type 54), PSK, RPK, x509
 - **Demo:** leshan.eclipseprojects.io — public test sandbox
-- **Strengths:** Reference Java implementation. Web UI. Cluster routing via CID node-ID prefix. Active community. Most-used server for TestFest.
+- **Strengths:** Reference Java implementation. Web UI. Cluster routing via CID node-ID prefix. Active community. Most-used server for TestFest (community claim, unverified).
 
 ### Leshan Sandbox — Hosted Test Environment
 - Public, always-available LwM2M server for testing clients. Web UI shows registration, object tree, and observation management.
@@ -30,7 +30,7 @@ The following are officially listed on openmobilealliance.org/specifications/res
 - **LwM2M:** v1.0, partial v1.1 | **Transport:** CoAP/UDP
 - **DTLS:** External — mbedTLS, TinyDTLS, wolfSSL
 - **Targets:** Linux, RTOS, bare-metal MCU (~20KB flash client core)
-- **Limitations:** No TCP/TLS, no OSCORE, no v1.2 composite/send/gateway in mainline.
+- **Limitations:** No TCP/TLS, no OSCORE, no v1.1 Composite/Send, no v1.2 Gateway in mainline.
 
 ### Zephyr LwM2M Client — RTOS
 - **Repo:** github.com/zephyrproject-rtos/zephyr (subsys/net/lib/lwm2m/)
@@ -46,8 +46,8 @@ The following are officially listed on openmobilealliance.org/specifications/res
 - **Transport:** CoAP/UDP, TCP, SMS, Non-IP (NIDD), MQTT
 - **DTLS:** mbedTLS, OSCORE, EST (Security Mode 4), HSM support
 - **Targets:** Linux, Zephyr, FreeRTOS, bare-metal, Mbed OS
-- **Strengths:** Full v1.2 — Composite ops, Send, LwM2M CBOR, Gateway. Excellent docs.
-- **TestFest:** v1.0, v1.1, v1.2 compliance (SVE-41, Raleigh June 2024).
+- **Strengths:** Full v1.2 — Composite ops and Send (v1.1+), LwM2M CBOR and Gateway (v1.2). Excellent docs.
+- **TestFest:** v1.0, v1.1, v1.2 interoperability-tested (SVE-41, Raleigh June 2024) — vendor/event claims as of 2026-10-10, not verifiable from OMA specs. TestFest results are interoperability evidence; OMA defines no LwM2M conformance tests.
 
 ### IOWA (C) — IoTerop Client + Server SDK
 - **Repo:** github.com/IOTEROP/IOWA (evaluation SDK)
@@ -55,7 +55,7 @@ The following are officially listed on openmobilealliance.org/specifications/res
 - **LwM2M:** v1.0, v1.1, v1.2 | **Claim:** Most compact C implementation.
 - **Targets:** Cortex-M0+ to Cortex-M33, any RTOS, Linux
 - **NIDD/LPWAN:** NB-IoT, LTE-M, LoRaWAN native support.
-- **TestFest:** Client + server tested 2016–2024 (v1.0, v1.1, v1.2).
+- **TestFest:** Client + server interoperability-tested 2016–2024 (v1.0, v1.1, v1.2) — vendor/event claims as of 2026-10-10, not verifiable from OMA specs.
 
 ### Friendly LwM2M Client — Friendly Technologies
 - **Repo:** github.com/Friendly-Technologies/Friendly-LwM2M-Client
@@ -64,7 +64,7 @@ The following are officially listed on openmobilealliance.org/specifications/res
 - **Transport:** CoAP/UDP, NIDD | **DTLS:** mbedTLS, TinyDTLS, wolfSSL
 - **Targets:** Linux, OpenWRT, Raspberry Pi 4, RPi4, ARM32/64, nRF9160, nRF9161, Zephyr OS, FreeTOS future
 - **Based on:** Wakaama/liblwm2m core, many new additions, fixed DTLS issues, abstraction and platform HAL.
-- **Ecosystem:** Part of Friendly One-IoT™ DMP — the earliest commercial LwM2M deployments (2017). Server supports v1.0/1.1/1.2/1.2.1 plus OMA-DM, TR-069, USP, MQTT, CoAP/S. Fortune 350+ telco deployments scaling to 1B+ NB-IoT devices.
+- **Ecosystem:** Part of Friendly One-IoT™ DMP — the earliest commercial LwM2M deployments (2017). Server supports v1.0/1.1/1.2/1.2.1 plus OMA-DM, TR-069, USP, MQTT, CoAP/S. Fortune 350+ telco deployments scaling to 1B+ NB-IoT devices (vendor claims as of 2026-10-10, not verifiable from OMA specs).
 
 ---
 
@@ -91,7 +91,7 @@ The following are officially listed on openmobilealliance.org/specifications/res
 
 ### Coiote IoT DM — AVSystem (Commercial)
 - v1.0/1.1/1.2. Full lifecycle DM, FOTA orchestration, multi-tenancy, REST API.
-- Most prolific TestFest participant (2016–2024).
+- Most prolific TestFest participant (2016–2024) — vendor/event claims as of 2026-10-10, not verifiable from OMA specs.
 
 ### Nokia IMPACT (Commercial)
 - Standards-based IoT platform. TestFest Seoul 2018/2019 (v1.0, v1.1 server).
@@ -126,6 +126,8 @@ The following are officially listed on openmobilealliance.org/specifications/res
 ## TestFest Product Listing
 
 Source: openmobilealliance.org/specifications/resources/product-listing
+
+> **Vendor/event claims as of 2026-10-10, not verifiable from OMA specs.** Event dates, product names and versions are transcribed from the OMA product-listing web page and event reports, not from any OMA specification. "Tested" means **interoperability-tested** at a TestFest under the ETS INT test cases; it is not a conformance or compliance certification.
 
 ### TestFest Event History
 
@@ -184,6 +186,7 @@ Source: openmobilealliance.org/specifications/resources/product-listing
 | Kookmin University | Research Server | v1.0 | TF-36 (2018) |
 
 ### Notable Deployments
+*Vendor/event claims as of 2026-10-10, not verifiable from OMA specs.*
 - **Friendly Technologies:** 1B+ NB-IoT device target. First commercial LwM2M smart water meter on NB-IoT (2017). Cloud-agnostic multi-tenancy.
 - **Altair/Sony ALT1250:** NB-IoT chipset with LwM2M client deployed on AT&T, Verizon, China Mobile, KDDI, SoftBank, Vodafone.
 - **Paradox Engineering:** Smart city deployments with uCIFI + IPSO Smart Objects (MinebeaMitsumi Group).
@@ -194,13 +197,14 @@ Source: openmobilealliance.org/specifications/resources/product-listing
 ## Testing & Conformance
 
 ### Test Specification Structure
-- **ETS:** Enabler Test Specification — test architecture, test purposes, prerequisites
-- **TP:** Test Purposes — objectives, preconditions, expected results
-- **TE:** Test Execution — step-by-step procedures
-- **TS:** Test Suite — grouped test cases by functionality
-- **SCR:** Static Conformance Requirements (Appendix B of Core TS)
+- **ETS:** OMA-ETS-LightweightM2M_INT (latest in library: 1.2.1, Candidate, 2024-03-12) — an **interoperability** test specification only. §5 "LightweightM2M Conformance Test Cases" reads "None."
+- **No TP/TE/TS hierarchy, no M/O/C levels:** each test case is a flat interoperability case with test configuration (ETS Appendix C), pre-conditions, procedure and pass criteria.
+- **Test case IDs:** `LightweightM2M-{release}-int-{n}`, e.g. `LightweightM2M-1.1-int-101`. Bands (ETS INT 1.2.1 §6): 0–99 Bootstrap, 100–199 Registration, 200–299 DM & SE, 300–399 Information Reporting, 400–499 Security, 500–999 core objects (0–7, multi-server), 1000–2099 additional objects (8, 9, 10–13, 15, 16, 19, 20).
+- **TestFest entry criteria (ETS INT 1.2.1 Appendix E.1):** int-101 Initial Registration, int-102 Registration Update, int-201 Plain Text read, int-203 TLV read.
+- **SCR:** Core TS 1.2.2 Appendix B "Static Conformance Requirements" is **voided**; there are no published SCR tables. Conformance rests on the normative statements in Core TS and Transport TS.
 
 ### Public Test Servers
+*Vendor claims as of 2026-10-10, not verifiable from OMA specs.*
 | Server | URL | Features |
 |--------|-----|----------|
 | Leshan Demo | leshan.eclipseprojects.io | Web UI, v1.0/1.1/1.2 |

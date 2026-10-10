@@ -7,146 +7,121 @@ Get a working LwM2M client-server connection in 5 minutes using the Leshan publi
 - A Linux, macOS, or Windows machine
 - Internet connection
 - One of the following:
-  - **Python 3.7+** (for Python client)
+  - **Python 3.10+** (for the Python client; aiocoap 0.4.17 requires >= 3.10)
   - **Git + GCC** (for C client with Wakaama)
   - **Docker** (for containerized client)
 
 ## Option 1: Python Client (Fastest, No Compilation)
 
-### Step 1: Install Python LwM2M Client
+### Step 1: Install aiocoap
 
 ```bash
-pip3 install aiocoap cbor2
-git clone https://github.com/Tanganelli/CoAPthon3.git
-cd CoAPthon3
-python3 setup.py install
+python3 -m venv lwm2m-venv && . lwm2m-venv/bin/activate
+pip install aiocoap   # tested with aiocoap 0.4.17 (requires Python >= 3.10)
 ```
+
+aiocoap builds the CoAP header and options (delta encoding, extended option lengths, Content-Format) per RFC 7252 §3.1, so no CoAP bytes are hand-encoded.
 
 ### Step 2: Create Simple LwM2M Client
 
-Create `simple_lwm2m_client.py`:
+Create `simple_lwm2m_client.py`. It registers, sends a Registration Update every `lifetime/2` seconds, and De-registers on Ctrl+C:
 
 ```python
 #!/usr/bin/env python3
-import socket
-import time
-from urllib.parse import urlencode
+"""Minimal LwM2M 1.2 Register / Update / De-register client (NoSec, UDP) using aiocoap."""
+import asyncio, os, signal, sys, time
+from datetime import datetime, timezone
+from aiocoap import Context, Message, POST, DELETE
 
-# LwM2M Server (Leshan public sandbox)
-SERVER_HOST = "leshan.eclipseprojects.io"
-SERVER_PORT = 5683
-
-# Client configuration
+APP_VERSION = "1.0.0"
+SERVER = "coap://leshan.eclipseprojects.io:5683"
 ENDPOINT_NAME = f"quickstart-client-{int(time.time())}"
-LIFETIME = 300  # seconds
+LIFETIME = 300  # seconds; must equal /1/0/1
+LWM2M_VERSION = "1.1"  # Leshan sandbox answered 4.12 to lwm2m=1.2 (tested 2026-10-10); use "1.2" against a 1.2 server
+# Objects 0 (Security), 21 (OSCORE) and 23 (COSE) are never advertised (Core TS 1.2.2 §6.2.1).
+OBJECT_LINKS = b"</1/0>,</3/0>"
+LINK_FORMAT = 40  # application/link-format
 
-def send_coap_post(host, port, uri_path, uri_query=None, payload=None):
-    """Send CoAP POST message (simplified, no library)"""
-    # CoAP message format (simplified):
-    # Ver=1 (2 bits), Type=CON (2 bits), TKL=0 (4 bits) = 0x40
-    # Code=POST (0.02) = 0x02
-    # Message ID (2 bytes, random)
-    # Options (Uri-Path, Uri-Query)
-    # Payload
+async def request(ctx, code, uri, payload=b"", content_format=None):
+    msg = Message(code=code, uri=uri, payload=payload)
+    if content_format is not None:
+        msg.opt.content_format = content_format
+    return await ctx.request(msg).response
 
-    msg_id = int(time.time()) & 0xFFFF
+async def main():
+    print(f"LwM2M Quick Start Client v{APP_VERSION} | LwM2M {LWM2M_VERSION} over CoAP/UDP (RFC 7252)")
+    print(f"Started {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S} UTC | server {SERVER} | ep {ENDPOINT_NAME}")
+    print("Ctrl+C = graceful exit (De-register) | Ctrl+X = abrupt exit (no De-register)", flush=True)
 
-    # Build CoAP POST for registration
-    coap_msg = bytearray()
-    coap_msg.append(0x40)  # Ver=1, Type=CON, TKL=0
-    coap_msg.append(0x02)  # Code=POST (0.02)
-    coap_msg.extend(msg_id.to_bytes(2, 'big'))  # Message ID
+    loop = asyncio.get_running_loop()
+    stop = asyncio.Event()
+    mode = {"deregister": True}
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
 
-    # Add Uri-Path option (11) for each path segment
-    for segment in uri_path.strip('/').split('/'):
-        seg_bytes = segment.encode('utf-8')
-        coap_msg.append(0xB0 | len(seg_bytes))  # Option 11 (Uri-Path), delta from 0
-        coap_msg.extend(seg_bytes)
+    tty_saved = None
+    if sys.stdin.isatty():  # Ctrl+X (0x18) detection; ISIG kept so Ctrl+C still raises SIGINT
+        import termios
+        fd = sys.stdin.fileno()
+        tty_saved = termios.tcgetattr(fd)
+        raw = termios.tcgetattr(fd)
+        raw[3] &= ~(termios.ICANON | termios.ECHO)
+        raw[6][termios.VMIN], raw[6][termios.VTIME] = 0, 0
+        termios.tcsetattr(fd, termios.TCSANOW, raw)
+        def on_key():
+            if b"\x18" in os.read(fd, 64):
+                mode["deregister"] = False
+                stop.set()
+        loop.add_reader(fd, on_key)
 
-    # Add Uri-Query options (15) if provided
-    if uri_query:
-        for query in uri_query.split('&'):
-            query_bytes = query.encode('utf-8')
-            coap_msg.append(0x40 | len(query_bytes))  # Option delta=4 (15-11=4)
-            coap_msg.extend(query_bytes)
-
-    # Payload marker and payload
-    if payload:
-        coap_msg.append(0xFF)
-        coap_msg.extend(payload.encode('utf-8'))
-
-    # Send UDP packet
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(5.0)
-    sock.sendto(coap_msg, (host, port))
-
-    # Receive response
+    ctx = await Context.create_client_context()
     try:
-        data, addr = sock.recvfrom(1024)
-        return data
-    except socket.timeout:
-        return None
+        # Register: POST /rd?ep=..&lt=..&lwm2m=1.2&b=U  (Transport TS 1.2.2 §6.4.3)
+        query = f"ep={ENDPOINT_NAME}&lt={LIFETIME}&lwm2m={LWM2M_VERSION}&b=U"
+        resp = await request(ctx, POST, f"{SERVER}/rd?{query}", OBJECT_LINKS, LINK_FORMAT)
+        if not resp.code.is_successful():
+            print(f"Registration failed: {resp.code} {resp.payload.decode(errors='replace')}")
+            return
+        location = "/" + "/".join(resp.opt.location_path)  # Location-Path options, e.g. rd, IETgKZzFOx
+        print(f"Registered: {resp.code}, location {location}", flush=True)
+
+        while not stop.is_set():
+            try:  # Registration Update before lifetime expiry
+                await asyncio.wait_for(stop.wait(), timeout=LIFETIME / 2)
+            except asyncio.TimeoutError:
+                resp = await request(ctx, POST, f"{SERVER}{location}")
+                print(f"Update: {resp.code}", flush=True)
+
+        if mode["deregister"]:
+            resp = await request(ctx, DELETE, f"{SERVER}{location}")
+            print(f"De-registered: {resp.code}")
+        else:
+            print("Abrupt exit: De-register skipped")
     finally:
-        sock.close()
-
-def register_lwm2m_client():
-    """Register LwM2M client with server"""
-    print(f"Registering endpoint: {ENDPOINT_NAME}")
-
-    # Registration parameters
-    query = f"ep={ENDPOINT_NAME}&lt={LIFETIME}&lwm2m=1.0&b=U"
-
-    # Object instances (link format)
-    # </0> = Security, </1> = Server, </3> = Device
-    payload = "</0/0>,</0/1>,</1/0>,</3/0>"
-
-    response = send_coap_post(
-        SERVER_HOST,
-        SERVER_PORT,
-        "/rd",
-        uri_query=query,
-        payload=payload
-    )
-
-    if response:
-        # Parse Location-Path from response (simplified)
-        print(f"✓ Registration successful!")
-        print(f"  View your device at: https://{SERVER_HOST}/#/clients/{ENDPOINT_NAME}")
-        return True
-    else:
-        print("✗ Registration failed")
-        return False
-
-def main():
-    print("="*60)
-    print("LwM2M Quick Start Client")
-    print("="*60)
-    print(f"Server: {SERVER_HOST}:{SERVER_PORT}")
-    print(f"Endpoint: {ENDPOINT_NAME}")
-    print()
-
-    if register_lwm2m_client():
-        print()
-        print("Client registered! Keep this script running.")
-        print(f"Open https://{SERVER_HOST} in your browser to interact.")
-        print()
-        print("You can now:")
-        print("  - Read /3/0/0 (Device Manufacturer)")
-        print("  - Read /3/0/1 (Device Model)")
-        print("  - Execute /3/0/4 (Reboot)")
-        print()
-        print("Press Ctrl+C to exit")
-
-        # Keep alive (simplified - real client would handle requests)
-        try:
-            while True:
-                time.sleep(60)
-        except KeyboardInterrupt:
-            print("\nExiting...")
+        if tty_saved is not None:
+            import termios
+            loop.remove_reader(sys.stdin.fileno())
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, tty_saved)
+        await ctx.shutdown()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 ```
+
+The Register request this produces (Transport TS 1.2.2 §6.4.3, Table 6.4.3-2):
+
+```
+CON POST  Uri-Host: leshan.eclipseprojects.io
+          Uri-Path: rd
+          Uri-Query: ep=quickstart-client-1791613491
+          Uri-Query: lt=300
+          Uri-Query: lwm2m=1.1
+          Uri-Query: b=U
+          Content-Format: 40 (application/link-format)
+          Payload: </1/0>,</3/0>
+```
+
+Equivalent one-shot construction: `Message(code=POST, uri='coap://leshan.eclipseprojects.io:5683/rd?ep=...&lt=300&lwm2m=1.2&b=U', payload=b'</1/0>,</3/0>', content_format=40)`. aiocoap splits the URI into one Uri-Path option (`rd`) and one Uri-Query option per `&`-separated parameter.
 
 ### Step 3: Run the Client
 
@@ -154,31 +129,29 @@ if __name__ == "__main__":
 python3 simple_lwm2m_client.py
 ```
 
-**Expected Output**:
-```
-============================================================
-LwM2M Quick Start Client
-============================================================
-Server: leshan.eclipseprojects.io:5683
-Endpoint: quickstart-client-1703260800
+The signal and `termios` handling is POSIX-only: run it on Linux, macOS or WSL.
 
-✓ Registration successful!
-  View your device at: https://leshan.eclipseprojects.io/#/clients/quickstart-client-1703260800
-
-Client registered! Keep this script running.
-Open https://leshan.eclipseprojects.io in your browser to interact.
+**Expected Output** (captured against the sandbox on 2026-10-10, with a shortened lifetime so the Updates appear quickly):
 ```
+LwM2M Quick Start Client v1.0.0 | LwM2M 1.1 over CoAP/UDP (RFC 7252)
+Started 2026-10-10 06:24:51 UTC | server coap://leshan.eclipseprojects.io:5683 | ep quickstart-client-1791613491
+Ctrl+C = graceful exit (De-register) | Ctrl+X = abrupt exit (no De-register)
+Registered: 2.01 Created, location /rd/IETgKZzFOx
+Update: 2.04 Changed
+Update: 2.04 Changed
+De-registered: 2.02 Deleted
+```
+
+With `LWM2M_VERSION = "1.2"` the sandbox replied `4.12 Precondition Failed unsupported lwm2m version`, which is the response a server gives when it does not support the enabler version the client indicates (Core TS 1.2.2 §6.2.1: the server MUST refuse such a Registration). Use `lwm2m=1.2` against a server that implements LwM2M 1.2.
 
 ### Step 4: Interact via Web UI
 
 1. Open https://leshan.eclipseprojects.io in your browser
-2. Find your endpoint name in the client list (e.g., `quickstart-client-1703260800`)
-3. Click on the endpoint name
-4. Try these operations:
-   - Click "Read" on Object 3 (Device) → see device information
-   - Click "Observe" on /3/0/9 (Battery Level) → receive notifications
+2. Find your endpoint name in the client list (e.g., `quickstart-client-1791613491`)
+3. Click on the endpoint name to see the registration (endpoint, lifetime, binding, advertised objects)
+4. Press Ctrl+C in the client terminal and watch the entry disappear (De-register)
 
-**Note**: The simplified Python example above shows the registration concept. For a fully functional client that handles server requests, use a proper library like `lwm2mclient` or proceed to Option 2 with Wakaama.
+**Note**: This minimal client implements only the Registration interface (Register, Update, De-register). It does not serve Objects, so Read/Write/Execute/Observe from the web UI will time out. For a client that answers server requests, use Option 2 (Wakaama) or Option 3 (Leshan client).
 
 ---
 
@@ -282,23 +255,24 @@ Open https://leshan.eclipseprojects.io and find `quickstart-docker-client`.
 ```
 Your Client                           Leshan Server
     │                                       │
-    │── POST /rd?ep=...&lt=300 ────────────►│
-    │   Payload: </0/0>,</1/0>,</3/0>      │
+    │── POST /rd?ep=...&lt=300&lwm2m=1.1&b=U ►│
+    │   Payload: </1/0>,</3/0>             │
     │                                       │
     │◄── 2.01 Created ──────────────────── │
-    │    Location: /rd/abc123              │
+    │    Location-Path: rd                  │
+    │    Location-Path: IETgKZzFOx          │
 ```
 
-**What was sent**:
-- `ep=quickstart-client-XXX` : Endpoint name (unique identifier)
-- `lt=300` : Lifetime in seconds (300s = 5 minutes)
-- `lwm2m=1.0` : LwM2M version
-- `b=U` : Binding mode (U = UDP)
-- Payload: List of object instances the client supports
+**What was sent** (Core TS 1.2.2 Table 6.2.1-1; query names per Transport TS 1.2.2 Table 6.4.3-1):
+- `ep=quickstart-client-XXX` : Endpoint Client Name, unique on that server. Optional from LwM2M 1.1 when it equals the security-protocol identifier (e.g. PSK identity) and no proxy sits in between; the Register SHOULD still include it (Core TS 1.2.2 §6.2.1), and with NoSec there is no security identifier to fall back on, so keep it for the sandbox
+- `lt=300` : Lifetime in seconds (300 s = 5 minutes); must equal `/1/x/1`
+- `lwm2m=1.1` : LwM2M enabler version (`lwm2m=1.2` for a 1.2 client against a 1.2 server; an unsupported version is refused, the sandbox answers 4.12)
+- `b=U` : Binding Mode (U = UDP). From LwM2M 1.1 Queue Mode is a separate valueless `Q` query parameter (e.g. `&b=U&Q`), not part of the binding string (the 1.0 `b=UQ` form is gone)
+- Payload: CoRE Link Format list of supported Objects and Object Instances. Security (0), OSCORE (21) and COSE (23) Object Instances MUST NOT be listed (Core TS 1.2.2 §6.2.1); they are only visible to the Bootstrap-Server via Bootstrap-Discover
 
 **What was received**:
 - `2.01 Created` : Registration successful
-- `Location: /rd/abc123` : Registration ID for future updates
+- Location-Path options `rd`, `IETgKZzFOx` : the registration location `/rd/IETgKZzFOx`. The server MUST return a location under `/rd` (Transport TS 1.2.2 §6.4.3). Updates are `POST /rd/IETgKZzFOx`; De-register is `DELETE /rd/IETgKZzFOx`. In aiocoap: `resp.opt.location_path`
 
 ### 2. Object Model
 
@@ -306,9 +280,10 @@ Your client advertised these objects:
 
 | Object ID | Name | Description |
 |-----------|------|-------------|
-| `/0/0` | Security | Server credentials (not readable remotely) |
 | `/1/0` | Server | Server configuration (lifetime, binding) |
 | `/3/0` | Device | Device information (manufacturer, model, etc.) |
+
+Object 0 (Security) is present on every client but is never advertised in Register or Update, nor are Objects 21 (OSCORE) and 23 (COSE). Objects 0 and 21 are reported only to the Bootstrap-Server (Bootstrap-Discover) and are not accessible through the Device Management and Service Enablement interface (Core TS 1.2.2 §6.1.7.3).
 
 ### 3. Read Operation
 
@@ -398,15 +373,20 @@ Run Wakaama client with PSK:
   -s 0123456789ABCDEF0123456789ABCDEF
 ```
 
-**Note**: Leshan sandbox accepts any PSK for testing. Production servers require pre-configured credentials.
+**Note**: Before connecting, register the PSK identity and key for your endpoint on the sandbox Security page (vendor behaviour, verify against the current Leshan demo). Production servers require pre-provisioned credentials, normally delivered by bootstrap.
 
 ### Try Firmware Update (FOTA)
 
-1. In Leshan UI, navigate to your client
-2. Click on Object 5 (Firmware Update)
-3. Write firmware URI: `coap://example.com/firmware.bin`
-4. Execute /5/0/2 (Update)
-5. Observe state changes: Downloading → Downloaded → Updating → Idle
+Use a client that implements Object 5 (e.g. the Wakaama `lwm2mclient`; the minimal Python client does not). Flow per Core TS 1.2.2 Appendix E.6 / E.6.1:
+
+1. In Leshan UI, navigate to your client and open Object 5 (Firmware Update)
+2. Observe `/5/0/3` (State) and `/5/0/5` (Update Result)
+3. Write the Package URI `/5/0/1`: `coap://example.com/firmware.bin`. State goes Idle (0) → Downloading (1) → Downloaded (2)
+4. Wait until `/5/0/3` = 2 (Downloaded). Update `/5/0/2` is only executable in Downloaded state
+5. Execute `/5/0/2` (Update). State goes Downloaded (2) → Updating (3) → Idle (0) on success
+6. Read `/5/0/5` (Update Result): 1 = firmware updated successfully. On failure the state returns to Idle or Downloaded depending on the cause (e.g. integrity check failure → Idle) and Update Result carries the reason (2–9); 10 = cancelled (Cancel executed), 11 = update deferred by the user, with State staying Downloaded
+
+Writing an empty string to `/5/0/1` resets the state machine to Idle with Update Result 0.
 
 ### Run Your Own Server
 
@@ -446,9 +426,9 @@ Point your client to localhost:
 
 **Symptom**: Client shows up briefly then disappears
 
-**Cause**: Client didn't respond to server's Read requests
+**Cause**: The registration lifetime (`lt`) expired without a Registration Update, so the server removed it
 
-**Solution**: Ensure client stays running and implements mandatory objects (0, 1, 3)
+**Solution**: Ensure the client stays running and sends a Registration Update (`POST /rd/<location>`) before `lt` expires; implement the mandatory objects (0, 1, 3) so server requests are answered
 
 ### DTLS Handshake Fails
 
@@ -476,7 +456,7 @@ Point your client to localhost:
 - **Client List**: See all connected clients
 - **Object Browser**: Explore object model hierarchy
 - **Request Viewer**: See CoAP messages in real-time
-- **Composite Operations**: Try Read-Composite, Write-Composite (v1.2+)
+- **Composite Operations**: Try Read-Composite, Write-Composite (LwM2M 1.1+, together with Observe-Composite and Send)
 - **Security**: Configure PSK, RPK, or x.509 credentials
 
 ### Wireshark Capture
@@ -500,7 +480,7 @@ Explore Wakaama source code:
 
 ### Official Specifications
 
-- **LwM2M v1.2 Core**: https://www.openmobilealliance.org/release/LightweightM2M/V1_2-20201110-A/
+- **LwM2M v1.2.2 Core** (OMA-TS-LightweightM2M_Core-V1_2_2-20240613-A, Approved 2024-06-13) and Transport (OMA-TS-LightweightM2M_Transport-V1_2_2-20240613-A): https://www.openmobilealliance.org/release/LightweightM2M/V1_2_2-20240613-A/
 - **CoAP RFC 7252**: https://www.rfc-editor.org/rfc/rfc7252.html
 - **DTLS RFC 6347**: https://www.rfc-editor.org/rfc/rfc6347.html
 
