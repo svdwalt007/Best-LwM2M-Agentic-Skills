@@ -17,3 +17,7 @@ dist/
 __pycache__/
 *.pyc
 .env
+
+# Claude Code hook output (local only)
+.claude/.cache/
+.claude/.edit-baks/
