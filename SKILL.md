@@ -1,51 +1,23 @@
 ---
 name: oma-lwm2m-expert
 description: >
-  OMA LwM2M (Lightweight Machine-to-Machine) protocol expert covering all specification versions
-  (v1.0 through v1.2.2, plus the v2.0 roadmap), the full object/resource data model, transport bindings, security modes,
-  and the surrounding ecosystem. Use whenever the user mentions: LwM2M, Lightweight M2M,
-  OMA SpecWorks, OMNA registry, CoAP, DTLS, DTLS CID, Connection ID, RFC 9146, RFC 7252,
-  RFC 7641, RFC 7959, RFC 8323, RFC 8613, OSCORE, TLV, SenML, CBOR, LwM2M CBOR, SenML-JSON,
-  SenML-CBOR, bootstrap, bootstrap-server, device management, firmware update (FOTA/FUOTA),
-  Queue Mode, PSK, RPK, x509, EST over CoAP, LwM2M gateway, Wakaama, liblwm2m, Leshan,
-  Anjay, Californium, Zephyr LwM2M, mbedTLS DTLS, TinyDTLS, wolfSSL DTLS, LwM2M objects,
-  LwM2M resources, IPSO smart objects, OMA DM, composite operations, Send operation,
-  LwM2M server, LwM2M client, NB-IoT device management, LTE-M device management,
-  LoRaWAN LwM2M, MQTT LwM2M, HTTP LwM2M, observation, notification, notification attributes,
-  object registry, object versioning, endpoint client name, registration, deregistration,
-  device twin, device shadow, blockwise transfer, CoAP observe, constrained devices,
-  IoT device management protocol, M2M protocol, OMA enabler, TestFest, smart city IoT,
-  eSIM provisioning LwM2M, RSP object 504, COSE object, LwM2M profile ID, delta firmware,
-  edge computing proxy LwM2M, or any OMA-TS-LightweightM2M spec reference. Also trigger on
-  questions about IoT device management protocols, constrained device communication, CoAP-based
-  device management, or comparisons between LwM2M and other IoT protocols (MQTT, HTTP, TR-069,
-  USP). Trigger on SGP.32, SGP.31, eSIM IoT, eIM, IPA, eUICC provisioning, Remote SIM
-  Provisioning, GSMA RSP over CoAP, eSIM profile lifecycle, carrier switching IoT. Trigger on
-  oneM2M interworking, TS-0014, LwM2M IPE, ETSI TS 118 114, oneM2M CSE, service layer bridge,
-  oneM2M AE. Trigger on uCIFI, smart city data model, street lighting LwM2M, outdoor lamp
-  controller, air quality object, waste container object, smart city interoperability, OMA
-  Smart City Working Group, digital twinning LwM2M. Trigger on CID extension type 53,
-  extension type 54, tls12_cid content type 25, RFC 9853, return routability check, DTLS RRC.
-  Trigger on LwM2M gateway edge proxy, edge computing LwM2M, LwM2M proxy, notification
-  aggregation, resource caching. Trigger on Northbound API, NB API, LwM2M server API,
-  server abstraction layer, LwM2M back-end integration. Trigger on LwM2M Profile ID,
-  vertical profile, device class template, LwM2M certification, conformance mark, OMA
-  TestFest, ETS conformance, ISO JTC-1 PAS LwM2M. Trigger on Advanced Firmware Update,
-  application-layer update, delta firmware, push pull FOTA, independently managed app layers.
-  Trigger on LwM2M v2.0, DMSO IoT WG, caDM, B-IoT, REDCap LwM2M. Trigger on Battery
-  Passport LwM2M, EU CRA RED, smart meter gateway, Rivir LEO satellite, LwM2M satellite,
-  LwM2M water metering, LwM2M gas metering, AMI LwM2M, grid edge. Trigger on LwM2M
-  architecture, client architecture, server architecture, HAL PAL abstraction, platform
-  abstraction layer, LwM2M integration pattern, hyperscaler integration, Azure IoT Hub
-  LwM2M, AWS IoT Core LwM2M, cloud connector, Kafka LwM2M, device twin LwM2M, device
-  shadow LwM2M, LwM2M at scale, massive IoT architecture, fleet management IoT, multi-
-  tenancy LwM2M, observation optimization, CID cluster routing, LwM2M production deployment,
-  FOTA flow, SOTA flow, bootstrap flow, registration flow, observe notify flow, LwM2M
-  message flow, LwM2M state machine.
-  If the user asks about managing IoT devices at scale using lightweight protocols, use
-  this skill. Even if they mention "device management" or "IoT protocol" generically without
-  saying "LwM2M", consider triggering if the context suggests constrained devices, CoAP,
-  or OMA standards.
+  OMA LwM2M expert: specs v1.0–v1.2.2 plus v2.0 roadmap, object/resource data model,
+  transports, security, ecosystem. Trigger on: LwM2M, Lightweight M2M, OMA SpecWorks,
+  OMNA registry, OMA-TS-LightweightM2M, CoAP (RFC 7252/7641/7959/8323), DTLS, DTLS CID
+  (RFC 9146), DTLS 1.3, RRC (RFC 9853), OSCORE (RFC 8613), PSK, RPK, X.509, EST, SNI,
+  NoSec, TLV, SenML JSON/CBOR, LwM2M CBOR, bootstrap, Bootstrap-Pack, registration,
+  endpoint name, Profile ID, Queue Mode, bindings (UDP/TCP/SMS/Non-IP/LoRaWAN/MQTT/HTTP/
+  WebSockets), Read/Write/Execute/Discover, composite operations, Send, observe/notify,
+  notification attributes, blockwise, access control, objects 0–28, IPSO objects, object
+  versioning, DDF, FOTA/SOTA, firmware/software update, Event Log, Gateway, Wakaama,
+  Leshan, Anjay, Californium, Zephyr LwM2M, TinyDTLS, mbedTLS, wolfSSL, ETS interop
+  testing, TestFest, NB-IoT/LTE-M/NIDD device management, eSIM (SGP.31/32, eIM, IPA,
+  RSP object 504), oneM2M interworking (TS-0014), uCIFI smart city, Northbound API, edge
+  proxy, device twin/shadow, hyperscaler/Kafka integration, fleet scale, CID routing,
+  client/server architecture, LwM2M flows and state machines, v2.0, DMSO WG, smart
+  metering/AMI. Also compare LwM2M with MQTT, HTTP, TR-069, USP and OMA DM. Use for
+  generic "IoT device management" questions when context implies constrained devices,
+  CoAP or OMA standards.
 ---
 
 # OMA LwM2M Protocol Expert
