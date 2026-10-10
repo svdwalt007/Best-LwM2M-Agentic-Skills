@@ -129,6 +129,7 @@ Upload the skill files to a Claude Project's knowledge base, or add the SKILL.md
 ## Complementary Skills
 
 This skill pairs well with:
+- **[Best IoT Protocols Skill]([https://github.com/svdwalt007/Best-IoT-Protocols-Skills])** — For IoT & Industrial Protocols (LAN,PAN, WAN, LP-WAN, Wired, Wireless, Industry4.0, etc...)
 - **[3GPP Expert Skill](https://github.com/lugasia/3gpp-skill)** — For 3GPP radio access and core network context (NB-IoT, LTE-M, 5G CIoT)
 
 ## Contributing
