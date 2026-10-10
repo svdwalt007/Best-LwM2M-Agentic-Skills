@@ -35,7 +35,7 @@
 │                                                 │ ├───────────┤ │  │
 │                                                 │ │ FOTA/SOTA │ │  │
 │                                                 │ ├───────────┤ │  │
-│                                                 │ │ Send (v1.2│ │  │
+│                                                 │ │ Send(v1.1+│ │  │
 │                                                 │ └───────────┘ │  │
 │                                                 └──────┬────────┘  │
 │                                                        │           │
@@ -109,16 +109,20 @@ Client                            Bootstrap-Server                LwM2M Server
   │   [Client stores all objects to NVM] │                            │
   │   [Client initiates DTLS to Server]  │                            │
   │                                      │                            │
-  │── POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=UQ ──────────────────►│
+  │── POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=U&Q ─────────────────►│
   │                                      │                            │
   │◄── 2.01 Created (Location: /rd/abc) ────────────────────────────│
 ```
+> Register parameters (Core TS 1.2.2 Table 6.2.1-1): `lt` and `lwm2m` are required; `ep` is not required from v1.1 (Required = No; may be omitted when the security-protocol identifier already identifies the client — Core TS 1.2.2 §7.4.1); in v1.1+ Queue Mode is the separate `Q` flag and `b` carries only the binding (U/M/H/T/S/N). `b=UQ`/`b=SQ` are LwM2M 1.0 encodings only. Optional `pid` (Profile ID) is v1.2+.
 
 ### Method 4: Bootstrap-Pack-Request (v1.2+ — Single Round-Trip)
 ```
 Client                            Bootstrap-Server
   │                                      │
-  │── POST /bspack?ep=myDevice ────────►│
+  │── GET /bspack?ep=myDevice[&acc=..] ►│
+  │   Accept: SenML CBOR (112) |         │
+  │           SenML JSON (110) |         │
+  │           LwM2M CBOR (11544)         │
   │                                      │
   │◄── 2.05 Content ──────────────────  │
   │    Content-Format: SenML-CBOR        │
@@ -130,8 +134,11 @@ Client                            Bootstrap-Server
   │    }                                 │
   │                                      │
   │   [Single request → complete config] │
-  │   [~25% less traffic than Method 3]  │
+  │   [No Bootstrap-Finish needed]       │
+  │   [Fewer round-trips than Method 3 —  │
+  │    savings deployment-dependent]     │
 ```
+> Transport TS 1.2.2 §6.4.2 (Table 6.4.2-1): Bootstrap-Pack-Request is a CoAP **GET** to `/bspack?ep={Endpoint Client Name}&acc={LwM2M Bootstrap-Server Account Object Instances}` with an Accept option. `acc` was added in v1.2.1. Core TS 1.2.2 §6.1.7.7: a Bootstrap-Server that does not implement it returns "not implemented" (5.01); one that refuses it returns "method not allowed" (4.05); after any error, or an unsuccessful Bootstrap-Pack, the client MUST fall back to Bootstrap-Request (Core TS 1.2.2 §6.1.3.3).
 
 ### Method 5: Server-Initiated Bootstrap (Re-provisioning)
 ```
@@ -161,9 +168,9 @@ Client                                           Server
   │   ... full handshake ...                        │
   │   [CID_S and CID_C established]                 │
   │                                                 │
-  │── POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=UQ ──►│
+  │── POST /rd?ep=myDevice&lt=300&lwm2m=1.2&b=U&Q ─►│
   │   Content-Format: application/link-format        │
-  │   Payload: </0/0>,</0/1>,</1/0>,                │
+  │   Payload: </1/0>,                              │
   │            </3/0>,</4/0>,</5/0>,                │
   │            </3303/0>;ver=1.1                     │
   │                                                 │
@@ -191,6 +198,8 @@ Client                                           Server
   │                                                 │
   │   ... device sleeps again ...                    │
 ```
+
+> Core TS 1.2.2 Table 6.2.1-1: the Register (and Update) object list MUST NOT contain the Security Object (/0), OSCORE Object (/21) or COSE Object (/23).
 
 ### Registration Update Triggers
 - **Timer:** Client updates before lifetime expires (typically at 80% of lt)
@@ -234,7 +243,7 @@ Server                                          Client
   │   [Cancel observation by sending RST]           │
 ```
 
-### Composite Observe (v1.2+ — Multiple Resources)
+### Composite Observe (v1.1+ — Multiple Resources)
 ```
 Server                                          Client
   │                                                │
@@ -272,10 +281,14 @@ On resource value change:
         YES → SEND NOTIFICATION (regardless of threshold)
         NO  → continue waiting
 
-Special attributes (v1.2+):
-  con=true  → Send as CON (confirmable) instead of NON
-  hqmax=N   → Buffer up to N historical values (time-series)
-  edge=true → Notify only on boolean threshold crossing
+Special attributes (v1.2+, Core TS 1.2.2 Table 7.3.2-1):
+  con=1     → Notification MUST be sent confirmable (con=0 → may be NON);
+              a multi-component notification is CON if any component has con=1
+  hqmax=N   → Store up to N historical notifications while offline/disabled;
+              oldest dropped when full. Only effective when "Notification
+              Storing When Disabled or Offline" (/1/x/6) is enabled
+  edge=1    → Notify on Boolean false→true (rising) transition;
+  edge=0    → notify on true→false (falling) transition; pmin still applies
 ```
 
 ---
@@ -283,36 +296,44 @@ Special attributes (v1.2+):
 ## FOTA — Firmware Update Flows
 
 ### Object 5 State Machine
+Core TS 1.2.2 §E.6.1 (Figure E.6.1-1). State resource /5/0/3; Update Result /5/0/5 (0–11).
 ```
-                    ┌──────────┐
-          ┌────────│  IDLE (0) │◄──────────────┐
-          │         └────┬─────┘               │
-          │              │                     │
-          │   Write /5/0/1 (URI)         Update Result
-          │   or Write /5/0/0 (Push)     set (success
-          │              │                or failure)
-          │              ▼                     │
-          │    ┌─────────────────┐             │
-          │    │ DOWNLOADING (1) │             │
-          │    └────────┬────────┘             │
-          │             │                      │
-          │     Download complete              │
-          │             │                      │
-          │             ▼                      │
-          │    ┌─────────────────┐             │
-    Error  │    │ DOWNLOADED (2)  │             │
-    during │    └────────┬────────┘             │
-    any    │             │                      │
-    state  │   Execute /5/0/2 (Update)         │
-          │             │                      │
-          │             ▼                      │
-          │    ┌─────────────────┐             │
-          └───►│ UPDATING (3)    │─────────────┘
-               └─────────────────┘
-               [Device reboots, applies
-                firmware, re-registers
-                with new version in /3/0/3]
+ Start / Res=0
+      │
+      ▼
+ ┌──────────────────────────────┐  Write /5/0/1 (URI) or
+ │ IDLE (0)   Res ∈ 0..11       │──Write /5/0/0 (Package, push)──────┐
+ └──────────────────────────────┘                                    │
+   ▲  ▲  ▲  ▲                                                       ▼
+   │  │  │  │  URI Resolution Failed [Res=6|7|9]   ┌──────────────────────────┐
+   │  │  │  ├─ Download Failed [Res=2..4] ─────────┤ DOWNLOADING (1)          │
+   │  │  │  ├─ Integrity Check Failed [Res=5] ─────┤                          │
+   │  │  │  └─ Cancel executed [Res=10] ───────────┤                          │
+   │  │  │                                          └────────────┬─────────────┘
+   │  │  │                                                       │ Download Finished
+   │  │  │                                                       ▼
+   │  │  │  Integrity Check Failed [Res=5]   ┌──────────────────────────────────┐
+   │  │  ├───────────────────────────────────┤ DOWNLOADED (2)                   │◄─┐
+   │  │  │  Cancel executed [Res=10]          │ Res ∈ {0, 8, 11}                 │  │ Update deferred
+   │  │  └─ Empty string to /5/0/1 or ───────┤                                  │──┘ [Res=11]
+   │  │     NULL written to /5/0/0            └───────────────┬──────────────────┘
+   │  │                                                       │ Execute /5/0/2 (Update)
+   │  │                                                       ▼  / initiate update
+   │  │                                       ┌──────────────────────────────────┐
+   │  └── Update Successful [Res=1] ──────────┤ UPDATING (3)   Res=0             │
+   └───── Firmware Update Failed [Res=8] ─────┤                                  │
+                                              └───────────────┬──────────────────┘
+                                                              │ Firmware Update Failed [Res=8]
+                                                              ▼ (image retained)
+                                                         DOWNLOADED (2)
 ```
+- Update (/5/0/2) is executable only in DOWNLOADED; the only entry to UPDATING is that Execute (or Automatic Upgrade at Download, /5/0/14 = true, Obj 5 v1.2).
+- Download, URI and integrity failures return to IDLE with the cause in Update Result; errors are reported **only** via /5/0/5 (Core TS 1.2.2 §E.6.1).
+- Update failure (Res=8) returns to IDLE or to DOWNLOADED (package kept for retry). No transition ever goes *into* UPDATING on error.
+- Cancel (/5/0/10, Obj 5 v1.1+) → IDLE, Res=10; refused with 4.05 Method Not Allowed once UPDATING has begun (OMA-SUP-XML_5 / Core TS 1.2.2 Table E.6-2).
+- Defer → stays DOWNLOADED, Res=11 (bounded by /5/0/13 Maximum Defer Period).
+- Operations that are not a trigger in the current state (e.g. Write /5/0/1 while DOWNLOADING) SHOULD be rejected.
+- After a successful update the device typically reboots and sends a Registration Update or Register with the new /3/0/3.
 
 ### FOTA Pull Method (Complete Flow)
 ```
@@ -386,7 +407,7 @@ Server                        Client
 ## SOTA — Software Update Flows
 
 ### Object 9: Software Management
-Object 9 manages installable software packages (apps, modules) independently of firmware.
+Object 9 (multi-instance; SwMgmt enabler 1.0.3, OMA-SUP-XML_9 v1.0) manages installable software packages (apps, modules) independently of firmware.
 
 ```
 Server                        Client
@@ -398,21 +419,28 @@ Server                        Client
   │                             │
   │◄── 2.01 Created ──────────│  (Instance /9/1 created)
   │                             │
-  │── Observe /9/1/9 ────────►│  [Observe Update State]
+  │── Observe /9/1/7 ────────►│  [Observe Update State]
   │                             │
   │   [Client downloads, verifies│
-  │    → State=DELIVERED]        │
+  │    State 1 DOWNLOAD STARTED  │
+  │    → 2 DOWNLOADED            │
+  │    → 3 DELIVERED]            │
   │                             │
-  │── Execute /9/1/4 ────────►│  [Install]
+  │── Execute /9/1/4 ────────►│  [Install — only in DELIVERED]
   │                             │
   │   [Client installs SW]       │
-  │◄── Notify (State=INSTALLED)│
+  │◄── Notify (State=4 INSTALLED)│
   │                             │
-  │── Execute /9/1/6 ────────►│  [Activate]
-  │◄── Notify (State=ACTIVATED)│
+  │── Observe /9/1/12 ───────►│  [Activation State]
+  │── Execute /9/1/10 ───────►│  [Activate]
+  │◄── Notify (/9/1/12 = true) │  [ENABLED]
 ```
+OMA-SUP-XML_9 v1.0: Update State /9/x/7 = 0 INITIAL, 1 DOWNLOAD STARTED, 2 DOWNLOADED, 3 DELIVERED, 4 INSTALLED (there is no ACTIVATED state; activation is the separate Boolean /9/x/12 Activation State). Install failure leaves the state at DELIVERED. Other resources: 6 Uninstall (E; arg 1 = "ForUpdate"; returns to INITIAL), 9 Update Result, 10 Activate (E), 11 Deactivate (E), 17 Software Component Link → Object 14.
 
-### v2.0 Advanced Firmware Update (Application-Layer)
+### v2.0 Advanced Firmware Update (Application-Layer) — speculative
+
+> **Non-normative — roadmap as of 2026-10-10.** Not defined in any published OMA specification (latest approved: LwM2M 1.2.2, 2024-06-13). Treat as indicative. In every published release Object 5 is **single-instance** (Core TS 1.2.2 Table E.6-1, `urn:oma:lwm2m:oma:5:1.2`, Instances = Single), so `/5/1` and `/5/2` below are not valid against Obj 5 v1.2. Standards-conformant multi-component update today uses Object 9 (one instance per package) with Object 14 (Software Component), per the SwMgmt enabler 1.0.3.
+
 ```
 Server                        Client
   │                             │
@@ -455,7 +483,7 @@ Server                        Client
 │  │  ├─ Registration Engine (RD client)                    │ │
 │  │  ├─ Bootstrap Client                                   │ │
 │  │  ├─ Observation Manager (pmin/pmax/gt/lt/st tracking)  │ │
-│  │  ├─ Send Engine (v1.2+ device-initiated push)          │ │
+│  │  ├─ Send Engine (v1.1+ device-initiated push)          │ │
 │  │  └─ Codec Layer (TLV, SenML-JSON, SenML-CBOR, CBOR)   │ │
 │  └─────────────────────────┬──────────────────────────────┘ │
 │                            │                                │
@@ -695,19 +723,25 @@ LwM2M Server ──Kafka Producer──► Kafka Cluster ──► Stream Proces
 
 ## Massive-Scale IoT Architecture Patterns
 
-### Pattern 1: Fleet Segmentation by Profile ID (v2.0)
+### Pattern 1: Fleet Segmentation by Profile ID (v1.2)
 ```
-  1M devices register with Profile IDs:
-  ┌────────────────────────────────┐
-  │ Profile 0x01: Smart Meter      │ → Object set: /0,/1,/3,/4,/5,/3305
-  │ Profile 0x02: Asset Tracker    │ → Object set: /0,/1,/3,/6,/3336,/3313
-  │ Profile 0x03: Streetlight Ctrl │ → Object set: /0,/1,/3,/3440,/3441
-  │ Profile 0x04: Env Sensor       │ → Object set: /0,/1,/3,/3303,/3304,/3442
-  └────────────────────────────────┘
+  1M devices register with Profile IDs (Register query param `pid`):
+  ┌──────────────────────────────────────┐
+  │ pid=oma:<registered-value>           │ → OMNA-registered object set
+  │ pid=v:smart-meter-a                  │ → Object set: /1,/3,/4,/5,/3305
+  │ pid=v:asset-tracker-b                │ → Object set: /1,/3,/6,/3336,/3313
+  │ pid=6:27354b9a                       │ → dynamic: SHA-256 truncated to
+  │                                      │   32 bits over objects+versions+instances
+  └──────────────────────────────────────┘
   
   Server auto-configures observations, FOTA groups, and dashboards
-  per Profile ID — zero manual provisioning for new devices.
+  per Profile ID — no per-device object-list parsing for known profiles.
 ```
+Profile ID is normative in **LwM2M 1.2** (Core TS 1.2.2 §6.2.1, Table 6.2.1-1; Transport TS 1.2.2 Table 6.4.3-1 `pid`), not a v2.0 feature and not an integer:
+- ASCII string per ABNF: pre-configured `oma:<value>` (OMNA-registered) or `v:<value>` (vendor); dynamic `<suite>:<lowercase hex>` where suite is the RFC 6920 Named Information hash-algorithm ID (e.g. `6` = SHA-256/32). Hash length ≥ 32 bits; object versions MUST be included in the fingerprint.
+- The referenced object list MUST exclude /0, /21 and /23, exactly like the Register payload.
+- Multiple `pid` values MAY be sent and MAY be mixed with an explicit link-format payload for rarely used objects.
+- If the server cannot resolve a Profile ID it MUST answer the Register with an error; the client MUST then re-register with the full object/instance list. A server MAY also refuse Profile IDs outright. Servers are not required to support `pid` at all.
 
 ### Pattern 2: CID-Based Cluster Routing
 ```
@@ -735,7 +769,7 @@ LwM2M Server ──Kafka Producer──► Kafka Cluster ──► Stream Proces
   │     Tracking: pmin=30, pmax=300     (30s–5min)
   │     Alerts:   pmin=0, pmax=60       (immediate–1min)
   │
-  ├── Use Composite Observe (v1.2+) to reduce observation count:
+  ├── Use Composite Observe (v1.1+) to reduce observation count:
   │     Instead of 5 separate observations → 1 composite observe
   │     5M observations → 1M composite observations
   │
@@ -743,10 +777,12 @@ LwM2M Server ──Kafka Producer──► Kafka Cluster ──► Stream Proces
   │     Device pushes data only when significant → no server polling
   │     Eliminates observations for fire-and-forget data
   │
-  └── Edge proxy aggregation (v2.0):
+  └── Edge proxy aggregation (v2.0 — non-normative):
         10K devices → Edge Proxy → 1 aggregated stream to cloud
-        80% reduction in WAN notification traffic
+        WAN notification reduction is deployment-dependent
+        (vendor/roadmap estimate, unverified)
 ```
+> **Non-normative — roadmap as of 2026-10-10.** Edge-proxy aggregation is not defined in any published OMA specification (latest approved: LwM2M 1.2.2, 2024-06-13). The published LwM2M Gateway enabler (Gateway TS 1.1.1) is the normative way to front non-LwM2M devices; it is not a CoAP proxy.
 
 ### Pattern 4: Queue Mode Tuning for Battery Life
 ```
@@ -818,9 +854,9 @@ LwM2M Server ──Kafka Producer──► Kafka Cluster ──► Stream Proces
 
 ### Client-Side
 - [ ] Security Mode configured (PSK minimum, x509 for enterprise)
-- [ ] CID enabled (non-zero-length, extension type 54)
+- [ ] DTLS CID (RFC 9146, extension type 54) negotiated where NAT rebinding is expected. The server-issued CID is what lets the server re-associate records after rebinding; a zero-length CID requested by the client is legitimate (RFC 9146 — verify). DTLS CID is optional in LwM2M 1.2+ — no LwM2M MUST
 - [ ] DTLS session persistence to NVM implemented
-- [ ] Queue Mode binding (UQ/NQ) for battery devices
+- [ ] Queue Mode (`b=U&Q` / `b=N&Q` in v1.1+; `UQ` is the 1.0 encoding) for battery devices
 - [ ] Lifetime tuned for deployment (balance battery vs responsiveness)
 - [ ] Firmware update state machine tested (all error paths)
 - [ ] Bootstrap-Server credentials separate from operational credentials
@@ -845,6 +881,6 @@ LwM2M Server ──Kafka Producer──► Kafka Cluster ──► Stream Proces
 - [ ] NIDD configuration with SCEF/NEF (if Non-IP transport)
 - [ ] PSM/eDRX timers aligned with LwM2M lifetime
 - [ ] NAT timeout > Queue Mode awake window
-- [ ] Firewall rules: CoAPs (UDP 5684), CoAP (UDP 5683)
+- [ ] Firewall rules (Transport TS 1.2.2 §6.2): outbound CoAP UDP 5683 / CoAPs DTLS 5684, and allow inbound UDP/DTLS back to the source address/port for **≥ 240 s** after each outbound packet; where firewall changes are impossible use CoAP over TCP 5683 / TLS 5684 (SHOULD)
 - [ ] DNS resolution for firmware download servers
 - [ ] SGP.32 eIM configured (if eSIM provisioning required)

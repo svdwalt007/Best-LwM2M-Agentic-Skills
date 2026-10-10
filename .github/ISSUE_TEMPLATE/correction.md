@@ -18,7 +18,7 @@ assignees: ''
 
 <!-- 
   Link to the authoritative source, e.g.:
-  - OMA-TS-LightweightM2M_Core-V1_2_2, §5.4.5
+  - OMA-TS-LightweightM2M_Core-V1_2_2, §6.3.5
   - RFC 9146, Section 3
   - OMNA LwM2M Registry entry for Object ID XXX
 -->

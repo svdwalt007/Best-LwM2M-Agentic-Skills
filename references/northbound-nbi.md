@@ -1,6 +1,8 @@
 # Northbound Interface — REST Mapping, Error Model, Auth/RBAC, and Observe Streaming
 
-How a LwM2M server exposes its managed device fleet to operators and northbound applications through an HTTP/REST northbound interface (NBI): the verb→operation mapping, the problem-details error model, OAuth 2.1 + DPoP authentication, server-owned RBAC and tenant isolation, and the Observe→event-streaming bridge. This aligns with the direction of the OMA LwM2M v2.0 Northbound API companion specification. Where content is design recommendation rather than normative protocol, it is marked **implementation pattern**.
+How a LwM2M server exposes its managed device fleet to operators and northbound applications through an HTTP/REST northbound interface (NBI): the verb→operation mapping, the problem-details error model, OAuth 2.1 + DPoP authentication, server-owned RBAC and tenant isolation, and the Observe→event-streaming bridge. The whole document is an **implementation pattern**: no OMA Northbound API specification has been published (as of 2026-10-10; latest approved LwM2M is 1.2.2, 2024-06-13), and none of the REST mapping, OAuth 2.1 + DPoP profile, or URI template below is defined by OMA. A Northbound API companion specification is reported to be in development (see [ecosystem.md](ecosystem.md)); its content is unpublished and unverified. Where content is design recommendation rather than normative protocol, it is additionally marked **implementation pattern**.
+
+> **Prior art.** The only published OMA document on a DM-server northbound interface is OMA-RD-M2MInterface-V1_0-20150324-A, "Management Interface for M2M Requirements" (Approved 2015-03-24): a requirements document for an interface from a Device Management server to the M2M service layer on top, derived from device and service management use cases. It defines requirements only — no API, URI scheme or authentication profile.
 
 ## Table of Contents
 1. [REST verb to LwM2M operation mapping](#rest-verb-to-lwm2m-operation-mapping)
@@ -75,7 +77,7 @@ The document is **extended** with a namespaced member, `lwm2m:coapCode`, that ca
 
 Detection rule (**implementation pattern**): treat a body as a problem document when it contains `type` **and** `title` **and** a numeric `status`. Do not rely on the `Content-Type` alone.
 
-**Version preconditions** surface as `412 Precondition Failed`, meaning "the device's LwM2M version does not support this operation." Composite operations require LwM2M v1.2+; Send and Composite operations are gated on the device's negotiated version. See [versions.md](versions.md) for the per-version capability matrix.
+**Version preconditions** surface as `412 Precondition Failed`, meaning "the device's LwM2M version does not support this operation." Read-Composite, Write-Composite, Observe-Composite, Cancel-Observe-Composite and Send were introduced in LwM2M **v1.1** (Core TS 1.1 §6.3.8–6.3.10, §6.4.4; Send is Core TS 1.2.2 §6.4.6) and are gated on the device's registered `lwm2m` version: return 412 only for v1.0 clients. A 412 on a v1.1 client would wrongly reject a valid device. See [versions.md](versions.md) for the per-version capability matrix.
 
 ---
 
@@ -98,7 +100,7 @@ Client obligation: read the **full** response (do not short-circuit on an empty 
 
 ## Authentication — OAuth 2.1 and DPoP
 
-The standardised NBI authenticates requests with OAuth 2.1 plus sender-constrained tokens via DPoP (`RFC 9449`).
+**Implementation pattern** (not an OMA-specified profile — the OMA NB API is unpublished). A hardened NBI authenticates requests with OAuth 2.1 plus sender-constrained tokens via DPoP (`RFC 9449`).
 
 Request shape:
 
@@ -291,9 +293,9 @@ Caution: EST is, in practice, usually **enrolment-only**. Revocation surfaces �
 | Surface | Character |
 |---------|-----------|
 | Legacy `/api` | Broad, ad-hoc, pre-standard |
-| Standardised `/v1` | OMA NBI direction — OAuth 2.1 + DPoP, `RFC 9457` errors, tenant-scoped |
+| Standardised `/v1` | Hardened NBI pattern — OAuth 2.1 + DPoP, `RFC 9457` errors, tenant-scoped (not an OMA-published API) |
 
-Recommendation: converge onto the standardised NBI and gate the migration behind **runtime feature flags** for gradual rollout — for example `useNbiApi`, `useCompositeOps`, `useCloudEvents`.
+Recommendation: converge onto the hardened `/v1` NBI and gate the migration behind **runtime feature flags** for gradual rollout — for example `useNbiApi`, `useCompositeOps`, `useCloudEvents`.
 
 **Pin the response-envelope shape per endpoint.** Mismatched envelopes silently break consumers. Common shapes:
 
@@ -314,11 +316,12 @@ Align test mocks to the **real contract**, not the reverse — mocks that drift 
 | `RFC 7641` | Observing Resources in CoAP — device-side basis for Observe→streaming |
 | `RFC 7638` | JSON Web Key (JWK) Thumbprint — DPoP `jkt` |
 | `RFC 7030` | Enrolment over Secure Transport (EST) — credential surface; revocation §4.2.3 |
-| `OMA-TS-LightweightM2M_Core` | LwM2M operation semantics (Read, Write, Execute, Create, Delete, Observe, Discover); version gating of Composite/Send |
+| `OMA-TS-LightweightM2M_Core` | LwM2M operation semantics (Read, Write, Execute, Create, Delete, Observe, Discover); Composite/Send are v1.1+ |
+| `OMA-RD-M2MInterface-V1_0-20150324-A` | Prior-art requirements for a DM-server northbound interface (requirements only, no API) |
 | CloudEvents v1.0.2 | Event envelope for notification/lifecycle streaming |
 | W3C Trace Context | `traceparent` propagation across the CoAP↔HTTP boundary |
 
-`TODO(verify):` the exact section number(s) of the OMA LwM2M v2.0 Northbound API companion specification that normatively define the REST verb mapping and the tenant-scoped URI template — encoded here as **implementation pattern** pending that citation.
+The REST verb mapping and tenant-scoped URI template are **implementation pattern** only: no published OMA specification defines them, and the reported Northbound API companion specification is unpublished (unverified against OMA spec library).
 
 ---
 

@@ -1,6 +1,8 @@
 # Best OMA LwM2M Expert Skill for Claude, OpenClaw, OpenAI, ChatGPT, xAI, Gemini and more...
 
-A comprehensive OMA LwM2M (Lightweight Machine-to-Machine) skill that turns Claude into a senior IoT protocol engineer — covering all specification versions from v1.0 (2017) through v2.0 (anticipated 2026), the complete object/resource data model, all transport bindings, security architecture, and the surrounding implementation ecosystem.
+A comprehensive OMA LwM2M (Lightweight Machine-to-Machine) skill that turns Claude into a senior IoT protocol engineer — covering all specification versions from v1.0 (2017) through the latest approved release v1.2.2 (2024), the non-normative v2.0 roadmap, the complete object/resource data model, all transport bindings, security architecture, and the surrounding implementation ecosystem.
+
+Reconciled against the OMA LwM2M 1.2.2 specification library (Core/Transport TS, ERELDs, companion-enabler TSs and SUP-XML object definitions) on 2026-10-10.
 
 <p align="center">
   <img src="https://lwm2m.openmobilealliance.org/wp-content/uploads/2024/05/LwM2M-logo.png" alt="LwM2M Logo" width="300">
@@ -10,12 +12,12 @@ A comprehensive OMA LwM2M (Lightweight Machine-to-Machine) skill that turns Clau
 
 This skill gives Claude deep, standards-grounded expertise across the full OMA LwM2M ecosystem:
 
-* **All versions**: v1.0, v1.0.2, v1.1, v1.1.1, v1.2, v1.2.1, v1.2.2, v2.0 (anticipated)
+* **All versions**: v1.0, v1.0.1, v1.0.2, v1.1, v1.1.1, v1.2, v1.2.1, v1.2.2 (latest approved), plus the v2.0 roadmap (non-normative)
 * **Protocol stack**: CoAP (RFC 7252), DTLS 1.2/1.3, TLS 1.2/1.3, OSCORE, SenML, CBOR
 * **All interfaces**: Bootstrap, Registration, DM&SE, Information Reporting
 * **All transports**: UDP, TCP, SMS, Non-IP (3GPP CIoT, LoRaWAN), MQTT, HTTP
 * **Security**: PSK, RPK, x509, EST, OSCORE, DTLS CID (RFC 9146), session persistence
-* **Data model**: Core objects (0-25), IPSO Smart Objects (3300+), OMNA registry, object versioning
+* **Data model**: Core and OMA objects (0–28), IPSO Smart Objects (3300+), OMNA registry, object versioning
 * **Implementation**: Wakaama, Leshan, Anjay, Californium, Zephyr LwM2M, DTLS library comparison
 * **Deployment**: Queue Mode, NB-IoT/LTE-M PSM, firmware update (FOTA), gateway architecture
 * **Ecosystem**: 3GPP CIoT integration, LoRaWAN, cloud platforms, industry verticals
@@ -50,7 +52,7 @@ This skill gives Claude deep, standards-grounded expertise across the full OMA L
 
 ### Claude Desktop (Cowork)
 
-1. Download `oma-lwm2m-expert.skill` from [Releases](https://github.com/YOUR-ORG/oma-lwm2m-expert/releases)
+1. Download `oma-lwm2m-expert.skill` from [Releases](https://github.com/svdwalt007/Best-LwM2M-Agentic-Skills/releases)
 2. Open it — Claude will prompt you to install
 
 ### Manual Install
@@ -64,7 +66,11 @@ Copy the `oma-lwm2m-expert/` folder into your Claude skills directory:
     ├── versions.md
     ├── objects.md
     ├── protocol-details.md
+    ├── operation-coap-mapping.md
     ├── security.md
+    ├── architecture.md
+    ├── northbound-nbi.md
+    ├── registry-ddf-authoring.md
     ├── implementations.md
     └── ecosystem.md
 ```
@@ -78,13 +84,16 @@ Upload the skill files to a Claude Project's knowledge base, or add the SKILL.md
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | Main skill instructions — response patterns, 6 knowledge domains, when to web search |
-| `references/versions.md` | Detailed version-by-version breakdown (v1.0 → v2.0) with feature deltas |
-| `references/objects.md` | Complete core objects reference (0-25), IPSO Smart Objects, OMNA registry |
+| `references/versions.md` | Detailed version-by-version breakdown (v1.0 → v1.2.2, plus labelled v2.0 roadmap) with feature deltas and the spec-library inventory |
+| `references/objects.md` | Complete core and OMA objects reference (0–28), IPSO Smart Objects, OMNA registry |
 | `references/protocol-details.md` | CoAP mapping, message flows, transport bindings, Wireshark patterns |
+| `references/operation-coap-mapping.md` | LwM2M operation ↔ CoAP method semantics, composite addressing, response codes |
 | `references/architecture.md` | Complete protocol flows (Bootstrap/Registration/Observe/FOTA/SOTA), client HAL/PAL architecture, server architecture, NBI/hyperscaler integration, massive-scale IoT patterns, production checklist |
+| `references/northbound-nbi.md` | Northbound REST/SSE design, error model, auth, Observe → event streaming |
+| `references/registry-ddf-authoring.md` | OMNA registry rules, DDF/SUP-XML authoring, ID allocation, validation fault codes |
 | `references/security.md` | DTLS/TLS/OSCORE deep-dive, CID flow, credential provisioning, library comparison |
 | `references/implementations.md` | Open-source stacks (Wakaama, Leshan, Anjay), testing, interop notes |
-| `references/ecosystem.md` | Gateway, 3GPP CIoT, LoRaWAN, cloud platforms, industry verticals, v2.0 roadmap |
+| `references/ecosystem.md` | Gateway, 3GPP CIoT, LoRaWAN, cloud platforms, industry verticals, v2.0 roadmap (non-normative) |
 
 ## Coverage
 
@@ -93,13 +102,14 @@ Upload the skill files to a Claude Project's knowledge base, or add the SKILL.md
 | Version | Published | Key Additions |
 |---------|-----------|---------------|
 | v1.0 | Feb 2017 | Core protocol: Bootstrap, Registration, DM&SE, Observe, Queue Mode |
+| v1.0.1 | Jul 2017 | Errata |
 | v1.0.2 | Feb 2018 | Bug fixes and errata |
-| v1.1 | Jun 2018 | TCP/TLS, Non-IP (3GPP CIoT, LoRaWAN), OSCORE, SenML |
-| v1.1.1 | Jun 2019 | CBOR for single resources |
-| v1.2 | Nov 2020 | MQTT, HTTP, Gateway, Composite ops, Send, LwM2M CBOR, DTLS CID |
-| v1.2.1 | Dec 2022 | Interop clarifications |
-| v1.2.2 | Jun 2024 | Bug fixes, editorial improvements |
-| v2.0 | 2026 (est.) | Profile IDs, delta FOTA, eSIM, edge computing proxy |
+| v1.1 | Jul 2018 | Core/Transport TS split, TCP/TLS, Non-IP (3GPP CIoT, LoRaWAN), OSCORE (Object 21), SenML, Composite ops, Send, EST |
+| v1.1.1 | Jun 2019 | CBOR for single resources (format 60) |
+| v1.2 | Nov 2020 | MQTT, HTTP, Gateway, LwM2M CBOR, Profile ID, Bootstrap-Pack, DTLS CID, optional (D)TLS 1.3 |
+| v1.2.1 | Dec 2022 | Clarifications, WebSockets binding |
+| v1.2.2 | Jun 2024 | Editorial and bug fixes (latest approved) |
+| v2.0 | Not published — v0.9 Candidate targeted Dec 2026 (non-normative, unverified) | Roadmap only: vertical Profile IDs, delta FOTA, eSIM flows, edge computing proxy |
 
 ### Underlying RFCs
 

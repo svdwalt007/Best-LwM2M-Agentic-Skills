@@ -71,50 +71,60 @@ A merged query overlays the libraries with **`custom` overriding `standard`/`ful
 **Natural key.** A registry entry is uniquely identified by the tuple:
 
 ```
-(ObjectID, LWM2MVersion, library)
+(ObjectID, ObjectVersion, library)      — equivalently (ObjectURN, library)
 ```
 
-ObjectID is **not globally unique** across versions or libraries — the same ObjectID can legitimately exist at different `LWM2MVersion` values and in different libraries. Never key storage, caches, or diffs on ObjectID alone.
+The Object URN already encodes both parts: `urn:oma:lwm2m:{oma|ext|x}:{ObjectID}[:{ObjectVersion}]` (Core TS 1.2.2 §7.2.1, Appendix D.2.1), with the `:{version}` segment omitted for 1.0 (§7.2.2). ObjectID is **not globally unique** across versions or libraries — `DDF.xml` lists Object 20 four times (`urn:oma:lwm2m:oma:20`, `:20:2.0`, `:20:2.1`, `:20:3.0`), each resolving to a different DDF file. Never key storage, caches, or diffs on ObjectID alone.
+
+`LWM2MVersion` is **not** part of the key: it is the *minimum LwM2M Enabler version* that supports the Object (Core TS 1.2.2 Appendix J), not a version of the Object. Two Object Versions can share one `LWM2MVersion` (Security 1.1 and 1.2 both carry `1.1`), and one Object Version never carries two.
 
 ---
 
 ## Object ID Allocation Ranges
 
-Classification is **order-sensitive**: bands overlap, so they must be tested in the sequence below. In particular the uCIFI Smart City carve-out sits inside the IPSO range and MUST be checked **before** the IPSO band.
+The normative classes are **non-overlapping** and defined in Core TS 1.2.2 Appendix D.2.1, Table D.2.1-1 "LwM2M Object Classes". Classification needs no ordering tricks — one range test per class:
 
-| Order | Range | Classification | Notes |
-|-------|-------|----------------|-------|
-| 1 | `< 0` | invalid | Negative IDs are never valid |
-| 2 | `0–99` | OMA core | Core objects (Security, Server, Device, etc.) |
-| 3 | `3400–3449` | uCIFI Smart City | **Check this band FIRST** — carved out of the IPSO range |
-| 4 | `3200–3499` | IPSO | IPSO Smart Objects (excluding the uCIFI carve-out) |
-| 5 | `10262–10284` | SEW Digital Utility | Water metering — South East Water "SEW Digital Utility IoT LwM2M Technical Specification" |
-| 6 | `32769–42768` | vendor/custom | Vendor-allocated objects |
-| 7 | else | oma-extension | Any other registered OMA extension |
+| Range | Class | URN segment | Notes |
+|-------|-------|-------------|-------|
+| `< 0`, `65535` | invalid | — | Negative IDs are never valid; 65535 (MAX_ID) MUST NOT identify an Object (Core TS 1.2.2 Table 7.4-1) |
+| `0–1023` | OMA | `oma` | Objects produced by OMA: core objects 0–7, companion-enabler objects 8–28, and further OMA objects such as 500–510 (incl. 504 Remote SIM Provisioning). The "0–99 core" cut-off used by some tools has no basis in the spec |
+| `1024–2047` | reserved | — | Reserved for future use |
+| `2048–10240` | SDO | `ext` | Third-party standards organisations and alliances — oneM2M (2048+), IPSO (3200–3350), GSMA (3351–3386, 3443), OpenAIS (3387–3406), uCIFI (3410–3449 less 3441–3443), Eclipse (3441–3442) |
+| `10241–32768` | Vendors | `x` | Vendors or individuals; **published** on the registry (e.g. SEW Digital Utility 10262–10284, IoTerop 18830–18831) |
+| `32769–42768` | Company Reserved | `x` | Bulk reservation of up to 50 IDs for private Objects **not published** on the registry |
+| `42769–42800` | Test | `x` | Testing only; MUST NOT be used in production |
+| `42801–65534` | reserved | — | Reserved for future use |
 
-**Vendor-private gate = 32768.** A `custom` object with `ObjectID < 32768` is **rejected** unless an explicit OMNA-range override is held for that tenant. The OMNA experimental range is documented as **26241–32768**, but the platform gates strictly at **32768** (anything below is treated as OMNA-administered). This strict gate is **platform gate code (not guaranteed official OMA)** — OMA formally allocates IDs and the experimental band is documentary.
+Owner sub-bands inside the SDO class (IPSO, GSMA, OpenAIS, uCIFI …) are **registry observations**, not spec-defined carve-outs: OMNA allocates `ext` IDs sequentially to whoever registers next. There is therefore no "uCIFI carve-out of the IPSO range" — IPSO-owned IDs stop at 3350 — and **Object 3443 inside the uCIFI run is GSMA's eSIM IoT object** (`urn:oma:lwm2m:ext:3443`, SGP.32 eIM↔IPA), so any owner inference from the ID alone is wrong. Read `<Owner>`/`<Source>` from `DDF.xml` instead of inferring from the number (registry-mirror evidence; verify against the live OMNA registry).
+
+**Vendor-private gate.** A platform that stores tenant-private (`custom`) objects should require them to sit in the **Company Reserved** class (`32769–42768`) or the Test class, because everything at or below 32768 is either OMA/SDO-administered or a *published* vendor allocation that must be obtained from OMNA. A gate expressed as "reject `ObjectID < 32768`" is off by one against Table D.2.1-1 (32768 is the last *published* vendor ID; private IDs start at 32769). The spec defines **no** "OMNA experimental range 26241–32768"; that figure is not in Core TS 1.2.2 and should not be quoted. The strict gate itself is **platform gate code (not guaranteed official OMA)** — OMA formally allocates IDs and only the 32769–42800 bands need no registration.
 
 ```
-                0   100        3200  3400  3449  3499      10262 10284     26241        32768 32769      42768
-OMA core      [===]
-uCIFI                                  [==========]
-IPSO                       [========================]    (minus uCIFI carve-out)
-SEW Digital                                              [===========]
-OMNA experimental                                                          [=================]
-vendor/custom                                                                              gate→[=============]
+        0        1023 1024    2047 2048            10240 10241            32768 32769        42768 42769 42800 42801  65534
+OMA     [===========]
+reserved               [=========]
+SDO ext                            [==================]
+Vendors x                                                [===================]
+Company Reserved x                                                              [=============]
+Test x                                                                                           [====]
+reserved                                                                                               [=========]
 ```
 
 ---
 
 ## Object URN Composition
 
+General form (Core TS 1.2.2 §7.2.1 and Appendix D.2.1): **`urn:oma:lwm2m:{oma|ext|x}:{ObjectID}[:{ObjectVersion}]`**
+
 | Object class | URN form | Example |
 |--------------|----------|---------|
-| OMA-registered | `urn:oma:lwm2m:oma:<id>` | core/OMA objects |
-| OMA extension (IPSO etc.) | `urn:oma:lwm2m:ext:<id>` | IPSO Temperature 3303 → `urn:oma:lwm2m:ext:3303` |
-| Vendor | `urn:oma:lwm2m:x:<ObjectID>` | optionally with a trailing `:...` segment |
+| OMA (0–1023) | `urn:oma:lwm2m:oma:<id>[:<ver>]` | Server 1.2 → `urn:oma:lwm2m:oma:1:1.2`; Location 1.0 → `urn:oma:lwm2m:oma:6` |
+| SDO / alliance (2048–10240) | `urn:oma:lwm2m:ext:<id>[:<ver>]` | IPSO Temperature 3303 → `urn:oma:lwm2m:ext:3303`; GSMA eSIM IoT → `urn:oma:lwm2m:ext:3443` |
+| Vendor, Company Reserved, Test (10241–42800) | `urn:oma:lwm2m:x:<id>[:<ver>]` | `urn:oma:lwm2m:x:10262` |
 
-**Invariant:** the ObjectID encoded in the URN MUST equal the document's `<ObjectID>`. A mismatch is a URN fault (see fault **401**). The URN scheme prefix is `urn:oma:lwm2m:` as defined in `OMA-TS-LightweightM2M_Core-V1_2_2, §7.2` (Object/Resource identification).
+**Version segment (§7.2.2).** Every Object Version gets its own URN; for version 1.0 the segment MAY be omitted, so `urn:oma:lwm2m:oma:44` and `urn:oma:lwm2m:oma:44:1.0` both denote Object 44 v1.0, while `urn:oma:lwm2m:oma:44:2.2` denotes v2.2. The DDF file on the OMNA portal is named after this URN (Appendix J).
+
+**Invariants:** the ObjectID encoded in the URN MUST equal the document's `<ObjectID>`; the version segment, when present, MUST equal `<ObjectVersion>`; the class segment MUST match the ID range in Table D.2.1-1. A mismatch is a URN fault (see fault **401**). The URN scheme prefix is `urn:oma:lwm2m:` as defined in Core TS 1.2.2 §7.2.1 (Object Versioning — General Policy) and Appendix D.2.1.
 
 ---
 
@@ -129,8 +139,8 @@ An object definition is a root `<Object>` element, or an `<Object>` nested under
 | `<ObjectID>` | yes | integer | Must be parseable as int; non-integer → object skipped |
 | `<Name>` | yes | string | Empty → fault 220 |
 | `<ObjectURN>` | yes | URN | See [URN composition](#object-urn-composition) above; problems → fault 401 |
-| `<LWM2MVersion>` | yes | e.g. `1.0`, `1.1`, `1.2` | Missing → fault 800 |
-| `<ObjectVersion>` | recommended | e.g. `1.0` | Object schema version |
+| `<LWM2MVersion>` | **optional** (schema) | e.g. `1.0`, `1.1`, `1.2` | Minimum LwM2M Enabler version supporting the Object; **MAY be omitted when it is 1.0** (Core TS 1.2.2 Appendix J). Platform fault 800 when missing is a local policy, not an OMA rule |
+| `<ObjectVersion>` | **optional** (schema) | e.g. `1.0`, `2.1` | Object Version per §7.2; MAY be omitted when 1.0, or when the Object ships inside an Enabler release (Appendix J). Absent ⇒ treat as 1.0 |
 | `<Mandatory>` | yes | literal `Mandatory` / `Optional` | Exact string equality |
 | `<MultipleInstances>` | yes | literal `Multiple` / `Single` | Exact string equality |
 | `<Description1>` | recommended | string | **Note the trailing `1`** in the tag name; empty → fault 230 |
@@ -141,8 +151,8 @@ An object definition is a root `<Object>` element, or an `<Object>` nested under
 | Child | Values | Notes |
 |-------|--------|-------|
 | `<Name>` | string | Empty → fault 410 |
-| `<Operations>` | `R` / `W` / `RW` / `E` | Normalised by upper-casing, keeping only R/W/E; invalid → fault 411 |
-| `<Type>` | one of the 9 canonical types | See below; invalid → fault 412 |
+| `<Operations>` | `R` / `W` / `RW` / `E` / **blank** | Normalised by upper-casing, keeping only R/W/E; invalid → fault 411. **Blank is valid**: it means no Device Management & Service Enablement operation is allowed — every resource of Objects 0 (Security), 21 (OSCORE) and 23 (COSE) is blank (Bootstrap-only), and Event Log 4016 `LogDataIncremental` is blank because it is Send-only |
+| `<Type>` | one of the 10 canonical types (9 value types + `none`) | See below; invalid → fault 412 |
 | `<Mandatory>` | literal `Mandatory` / `Optional` | Exact string equality |
 | `<MultipleInstances>` | literal `Multiple` / `Single` | Exact string equality |
 | `<Units>` | SenML symbol, blank, or `TBD` | Invalid → fault 417 |
@@ -155,23 +165,24 @@ An object definition is a root `<Object>` element, or an `<Object>` nested under
 
 ## Resource Types & Operations
 
-There are **9 canonical resource Types** (`OMA-TS-LightweightM2M_Core-V1_2_2, §7.4.3` data type table; `objlnk` v1.0+, `corelnk` v1.1+):
+There are **10 canonical resource Types**: the 9 value data types of Core TS 1.2.2 **Appendix C "Data Types (Normative)"** plus **`none`**, which Appendix D.1 prescribes for Execute resources ("MUST have no associated Data Type (none) encoded as an empty value in Object DDF file"). `objlnk` dates from v1.0; `unsigned_integer` and `corelnk` were added in v1.1.
 
-| Canonical token | DDF `<Type>` spelling | Notes |
-|-----------------|-----------------------|-------|
-| `string` | `String` | UTF-8 text |
-| `integer` | `Integer` | Signed |
-| `unsigned_integer` | `Unsigned Integer` | **Two-word DDF spelling** maps to `unsigned_integer` (v1.1+) |
-| `float` | `Float` | |
-| `boolean` | `Boolean` | |
-| `opaque` | `Opaque` | Raw bytes |
-| `time` | `Time` | Unix time |
-| `objlnk` | `Objlnk` | Object link |
-| `corelnk` | `Corelnk` | CoRE Link Format (v1.1+) |
+| Canonical token | DDF `<Type>` spelling | Notes (Appendix C) |
+|-----------------|-----------------------|--------------------|
+| `string` | `String` | UTF-8 text; min/max length MAY be given in RangeEnumeration |
+| `integer` | `Integer` | 8/16/32/64-bit signed; also used for enumerations |
+| `unsigned_integer` | `Unsigned Integer` | **Two-word DDF spelling** maps to `unsigned_integer` (v1.1+); also used as a bitmask |
+| `float` | `Float` | 32- or 64-bit |
+| `boolean` | `Boolean` | 8-bit, 0 = False, 1 = True |
+| `opaque` | `Opaque` | Binary octets; length constraints in RangeEnumeration |
+| `time` | `Time` | Unix time, signed seconds since 1970-01-01 UTC |
+| `objlnk` | `Objlnk` | Object link; `65535:65535` = null link |
+| `corelnk` | `Corelnk` | CoRE Link Format (RFC 6690), v1.1+ |
+| `none` | *(empty `<Type></Type>`)* | Execute resources only (Appendix D.1) |
 
 Any `<Type>` token outside this allow-list → fault **412**.
 
-**Operations.** Values are normalised by upper-casing and keeping only the characters R/W/E. Valid Operations are **exactly** `R`, `W`, `RW`, `E`. There is **no `RWE`** — a resource is either a value resource (readable and/or writable, *with* a Type) or an Executable command (`E`, *without* a Type), never both. Anything else → fault **411**.
+**Operations.** Values are normalised by upper-casing and keeping only the characters R/W/E. Valid Operations are **exactly** `R`, `W`, `RW`, `E`, or **blank**. There is **no `RWE`** — a resource is either a value resource (readable and/or writable, *with* a Type) or an Executable command (`E`, *with* Type `none`), never both. A blank `<Operations>` is a legitimate declaration that the resource has no DM&SE operation (Bootstrap-only credentials in Objects 0/21/23; the Send-only Event Log resource 4016) and MUST NOT be rewritten to `R`. Anything else → fault **411**.
 
 ---
 
@@ -181,18 +192,18 @@ These are the platform's gate codes, modelled on OMNA validator behaviour. Codes
 
 | Code | Trigger | Origin |
 |------|---------|--------|
-| `200` | ObjectID in OMNA-administered range (i.e. `< 32768` without override) | platform gate |
+| `200` | ObjectID of a *custom* object outside the Company Reserved / Test classes (Core TS 1.2.2 Table D.2.1-1: private IDs are `32769–42768`, test `42769–42800`; platforms commonly gate at `< 32768`, which is off by one) without override | platform gate |
 | `220` | Empty Object Name | platform gate |
 | `230` | Empty Object Description (`<Description1>`) | platform gate |
 | `401` | URN problems: missing; not in `x:` vendor namespace for a custom object; non-numeric ID segment; URN ObjectID ≠ `<ObjectID>` | platform gate |
 | `410` | Empty Resource Name | platform gate |
-| `411` | Operations not one of `R` / `W` / `RW` / `E` | platform gate |
-| `412` | Invalid Type (not in the 9-type allow-list) | platform gate |
+| `411` | Operations not one of `R` / `W` / `RW` / `E` / blank | platform gate |
+| `412` | Invalid Type (not in the 10-type allow-list: Appendix C types + `none`) | platform gate |
 | `413` | **Type/Operation matrix violation** | **official OMA validator fault** |
 | `414` | Execute resource not Single-instance | platform gate |
 | `417` | **Units not a valid SenML symbol** | **official OMA validator fault** |
 | `418` | RangeEnumeration not using `..` | platform gate |
-| `800` | Missing `<LWM2MVersion>` | platform gate |
+| `800` | Missing `<LWM2MVersion>` — **platform policy only**: the element is optional in the LwM2M schema and MAY be omitted when the minimum Enabler version is 1.0 (Core TS 1.2.2 Appendix J). Registry DDFs such as Object 15 v1.0 omit it | platform gate |
 
 **Pseudo-codes** (structural, not numeric):
 
@@ -206,14 +217,14 @@ These are the platform's gate codes, modelled on OMNA validator behaviour. Codes
 
 ## Fault 413 — Execute/Type Matrix
 
-Fault 413 enforces the Type/Operation relationship from `OMA-TS-LightweightM2M_Core-V1_2_2, §7.4` (resource operation/data-type rules). The matrix is precise:
+Fault 413 enforces the Type/Operation relationship from Core TS 1.2.2 **Appendix D.1 (Object Template)**: "A Resource, which supports the 'Execute' operation, MUST have no associated Data Type (none) encoded as an empty value in Object DDF file" and "MUST have 'Single' as value of the 'Instances' field". The matrix is precise:
 
 | Operation class | `<Type>` | `<Units>` | `<RangeEnumeration>` | `<MultipleInstances>` |
 |-----------------|----------|-----------|----------------------|-----------------------|
 | Execute (`E`) | MUST be absent → present is **413** | MUST be absent → present is **413** | MUST be absent → present is **413** | MUST be `Single` → `Multiple` is **414** |
-| Value (`R` / `W` / `RW`) | MUST be present → missing is **413**; present-but-unknown is **412** | optional | optional | `Single` or `Multiple` |
+| Value (`R` / `W` / `RW` / blank) | MUST be present → missing is **413**; present-but-unknown is **412** | optional | optional | `Single` or `Multiple` |
 
-An **Execute** resource is a command trigger: it carries no value, so declaring a Type, Units, or RangeEnumeration is meaningless and rejected, and it must be a single instance. A **value** resource (R/W/RW) must always declare a Type — a missing Type is 413, an unrecognised Type is 412.
+An **Execute** resource is a command trigger: it carries no value, so declaring a Type, Units, or RangeEnumeration is meaningless and rejected, and it must be a single instance (the DevCapMgmt Object 15 v1.0 DDF declared `opDisable` as Multiple and was corrected to Single in v2.0). A **value** resource (R/W/RW, or blank-Operations Bootstrap-only/Send-only) must always declare a Type — a missing Type is 413, an unrecognised Type is 412.
 
 ---
 
@@ -244,7 +255,7 @@ Matching is **case-sensitive** and against the symbol, not the name.
 - **Temperature is `Cel`** — *not* `C` (which is coulomb, electric charge) and *not* `°C`.
 - **`TBD`** is the legal placeholder; use it rather than guessing a symbol when the unit is genuinely undecided.
 
-> Do not invent unit symbols. If a needed unit is not in the registry, use `TBD` and flag it, or raise the unit upstream — `TODO(verify): confirm any unit not listed above against the live IANA SenML Units registry before submission`.
+> Do not invent unit symbols. If a needed unit is not in the registry, use `TBD` and flag it, or raise the unit upstream. The grouped list above is a convenience extract; the registry repository ships its own machine-readable copy (`LWM2M_senml_units.xml`) and the IANA SenML Units registry is the live authority — confirm any symbol not listed above against one of those before submission.
 
 ---
 
@@ -263,14 +274,14 @@ Matching is **case-sensitive** and against the symbol, not the name.
 
 ## Registry Sync & Normalisation
 
-When persisting a synced OMNA resource whose source DDF leaves `<Operations>` or `<Type>` empty, the writer substitutes defaults:
+Some sync tools, when persisting an OMNA resource whose source DDF leaves `<Operations>` or `<Type>` empty, substitute defaults:
 
-| Missing field | Substituted default |
-|---------------|---------------------|
-| `<Operations>` empty | `R` |
-| `<Type>` empty | `string` |
+| Missing field | Substituted default | Why it is lossy |
+|---------------|---------------------|-----------------|
+| `<Operations>` empty | `R` | An empty `<Operations>` is a **normative statement** that the resource has no DM&SE operation — all of Objects 0, 21 and 23, and Event Log 4016 (Send-only). Rewriting it to `R` would advertise Read access to PSK secrets and OSCORE master secrets |
+| `<Type>` empty | `string` | An empty `<Type>` is the `none` type of an Execute resource (Core TS 1.2.2 Appendix D.1), not a String |
 
-Consequently a synced resource may display `R` / `string` even when the source DDF omitted those elements. This is **tool-applied normalisation, not necessarily present in the source** — never treat a synced `R`/`string` as evidence the upstream DDF declared them. Record provenance so the substitution is auditable.
+Consequently a synced resource may display `R` / `string` even when the source DDF omitted those elements. This is **tool-applied normalisation, not present in the source** — never treat a synced `R`/`string` as evidence the upstream DDF declared them, and prefer a sync that preserves blank as blank (`operations = none`, `type = none`). Record provenance so any substitution is auditable.
 
 ---
 
@@ -356,18 +367,18 @@ These protect confidentiality, integrity, and tenant isolation of private defini
 
 | Fault | One-line fix |
 |-------|--------------|
-| `200` | Use `ObjectID ≥ 32768` (or hold an OMNA-range override) |
+| `200` | Use a Company Reserved ID (`32769–42768`) or Test ID (`42769–42800`) for a private object; anything lower must be allocated by OMNA (or hold an OMNA-range override) |
 | `220` | Add a non-empty `<Name>` |
 | `230` | Add a non-empty `<Description1>` (note the trailing `1`) |
 | `401` | Use `urn:oma:lwm2m:x:<id>` for vendor objects and make the URN ID equal `<ObjectID>` |
 | `410` | Add a non-empty resource `<Name>` |
-| `411` | Set `<Operations>` to exactly `R`, `W`, `RW`, or `E` |
-| `412` | Use one of the 9 canonical Types (e.g. `Unsigned Integer` → `unsigned_integer`) |
+| `411` | Set `<Operations>` to exactly `R`, `W`, `RW`, or `E` — or leave it blank for a Bootstrap-only / Send-only resource |
+| `412` | Use one of the 10 canonical Types (Appendix C types, e.g. `Unsigned Integer` → `unsigned_integer`; empty = `none` for Execute) |
 | `413` | Remove Type/Units/Range from an Execute resource **or** add a Type to a value resource |
 | `414` | Make the Execute resource `Single`-instance |
 | `417` | Use an exact SenML symbol — temperature is `Cel` (not `C`/`°C`); or use `TBD` |
 | `418` | Use `..` (e.g. `0..100`), not `0-100` or `0 to 100` |
-| `800` | Add `<LWM2MVersion>` (e.g. `1.1`) |
+| `800` | Add `<LWM2MVersion>` (e.g. `1.1`) if the platform demands it; the OMA schema allows omission when the minimum Enabler version is 1.0 (Appendix J) |
 | `RES_EMPTY` | Declare at least one resource |
 | `RES_DUP` | Make every Resource `ID` unique within the object |
 | `INVALID_XML` | Fix well-formedness; re-validate before submission |
@@ -378,10 +389,16 @@ These protect confidentiality, integrity, and tenant isolation of private defini
 
 | Reference | Section / Scope | Used for |
 |-----------|-----------------|----------|
-| `OMA-TS-LightweightM2M_Core-V1_2_2` | §7.2 | Object/Resource identification, URN scheme |
-| `OMA-TS-LightweightM2M_Core-V1_2_2` | §7.4 | Resource Operations / Type rules (fault 413 matrix) |
-| `OMA-TS-LightweightM2M_Core-V1_2_2` | §7.4.3 | Canonical data-type table (9 types) |
-| `OMA-TS-LightweightM2M_Core-V1_2_2` | §6.4.2 | Registration/registry behaviour |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | §7.2.1 General Policy, §7.2.2 Object Version format | Type I / Type II evolution rules, URN `urn:oma:lwm2m:{oma,ext,x}:ObjectID[:version]`, 1.0 version omission |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | §7.2.3 | When `ver` must be sent in Register/Update/Discover |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | §7.4 (Table 7.4-1), §7.4.2 | 16-bit identifiers, MAX_ID 65535 reserved; Reusable Resource frozen characteristics |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | Appendix C | Canonical data-type table (9 value types) |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | Appendix D.1 | Object/Resource template; Execute ⇒ Type `none`, Instances Single; RangeEnumeration `..` syntax (fault 413/414/418 rules) |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | Appendix D.2.1 (Table D.2.1-1), D.2.2 | Object ID classes and ranges; Resource registry |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | Appendix J | `LWM2MVersion` / `ObjectVersion` optional, default 1.0; DDF file naming by URN |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | Appendix K | LwM2M XML schema (`LWM2M.xsd`, `LWM2M-v1_1.xsd`) |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | §6.2.1 Register Operation | Object list / `ver` attribute in the Register payload; Objects 0, 21, 23 excluded |
+| `OMA-TS-LightweightM2M_Core-V1_2_2` | §6.4.2 Notify Operation, §6.4.6 Send Operation | Observe/Notify semantics cited by resource descriptions ("MAY be reported by Observe"); Send-only resources such as Event Log 4016 |
 | `RFC 8428` | SenML | Primary SenML unit symbol registry (fault 417) |
 | `RFC 8798` | Additional SenML units | Secondary unit symbols (fault 417) |
 | IANA SenML Units registry | live registry | Authoritative current unit list |
@@ -389,7 +406,7 @@ These protect confidentiality, integrity, and tenant isolation of private defini
 | South East Water | "SEW Digital Utility IoT LwM2M Technical Specification" | ID band 10262–10284 (water metering) |
 | `OpenMobileAlliance/lwm2m-registry` | `prod` branch, `DDF.xml` | Live registry publication format |
 
-> Where a section number could not be independently confirmed against the published TS, treat it as indicative: `TODO(verify): confirm exact §-numbers against OMA-TS-LightweightM2M_Core-V1_2_2 before quoting in a submission.`
+> Section and appendix numbers above were checked against the text of OMA-TS-LightweightM2M_Core-V1_2_2-20240613-A. Older Core releases number these differently (e.g. the data-type appendix and the OMNA guidelines moved between 1.0 and 1.1), so re-check before quoting against a different release.
 
 ---
 
