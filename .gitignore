@@ -18,6 +18,6 @@ __pycache__/
 *.pyc
 .env
 
-# Claude Code hook output (local only)
+# Local hook output (cache and edit backups)
 .claude/.cache/
 .claude/.edit-baks/
